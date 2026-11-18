@@ -2,19 +2,28 @@
 setlocal enabledelayedexpansion
 
 :: ================================================================
-:: setup.bat --- CCTV AI Detection: Auto-Setup untuk Perangkat Baru
-:: Double-click file ini untuk install semua kebutuhan otomatis.
-:: Prasyarat: Python 3.11+ sudah terinstall di perangkat ini.
+:: setup.bat --- CCTV AI Detection: Smart Setup + Launcher
+:: Windows launcher: setup otomatis jika belum, lalu langsung run.
+:: Untuk Linux/Mac gunakan: bash setup.sh
 :: ================================================================
 
 cls
 echo.
 echo  +========================================================+
-echo  ^|       CCTV AI Detection --- Setup Otomatis            ^|
-echo  ^|   Menyiapkan semua kebutuhan di perangkat ini...      ^|
+echo  ^|       CCTV AI Detection --- Smart Launcher            ^|
+echo  ^|   Setup otomatis + jalankan sistem sekaligus          ^|
 echo  +========================================================+
 echo.
-echo  Pilih mode instalasi:
+
+:: --- Cek apakah setup sudah pernah dilakukan ---
+if exist "%~dp0.setup_done" (
+    echo  [OK] Setup sudah selesai sebelumnya. Langsung menjalankan sistem...
+    echo.
+    goto RUN
+)
+
+:: --- Belum pernah setup: tanya mode instalasi ---
+echo  Ini adalah instalasi pertama. Pilih mode:
 echo.
 echo    [1]  Install Lengkap  (deps + konfigurasi Telegram + shortcut Desktop)
 echo    [2]  Install Minimal  (deps saja, konfigurasi dan shortcut dilewati)
@@ -34,9 +43,8 @@ if "!INSTALL_MODE!"=="1" (
     echo  Mode: Install Minimal dipilih.
 )
 echo.
-echo  Proses akan berjalan step by step.
-echo  Tekan Enter di setiap langkah untuk melanjutkan,
-echo  atau tekan Ctrl+C kapan saja untuk membatalkan.
+echo  Proses berjalan step by step. Tekan Enter di setiap langkah.
+echo  Tekan Ctrl+C kapan saja untuk membatalkan.
 echo.
 pause
 
@@ -79,8 +87,7 @@ echo  +========================================================+
 echo  ^|  Langkah 2 / 5 : Memperbarui pip                      ^|
 echo  +========================================================+
 echo.
-echo  Memperbarui pip ke versi terbaru agar instalasi berjalan
-echo  dengan benar dan tidak ada masalah kompatibilitas.
+echo  Memperbarui pip ke versi terbaru.
 echo.
 pause
 echo.
@@ -99,8 +106,7 @@ echo  ^|  Langkah 3 / 5 : Menginstall dependensi               ^|
 echo  +========================================================+
 echo.
 echo  Menginstall semua library dari requirements.txt.
-echo  Proses ini membutuhkan koneksi internet dan bisa memakan
-echo  waktu 5-15 menit tergantung kecepatan internet.
+echo  Waktu: 5-15 menit tergantung kecepatan internet.
 echo.
 pause
 echo.
@@ -138,37 +144,31 @@ if "!INSTALL_MODE!"=="2" (
 
 if exist "%~dp0.env" (
     echo  File .env sudah ada -- konfigurasi dilewati.
-    echo  Edit "%~dp0.env" jika ingin mengubah pengaturan.
     echo.
     pause
     goto LANGKAH5
 )
 
-echo  File .env belum ada. Mari isi konfigurasi dasar.
+echo  File .env belum ada. Isi konfigurasi dasar:
 echo  (Tekan Enter tanpa mengetik apa pun untuk melewati tiap field)
 echo.
 pause
 echo.
 
-:: -- Telegram Bot Token --
 echo  +-- TELEGRAM BOT TOKEN ------------------------------------+
 echo  ^| Dapatkan token dari @BotFather di Telegram.            ^|
 echo  ^| Contoh: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ          ^|
-echo  ^| (Kosongkan = isi nanti di file .env)                   ^|
 echo  +----------------------------------------------------------+
 set /p BOT_TOKEN="  Masukkan Telegram Bot Token: "
 echo.
 
-:: -- Telegram Chat ID --
 echo  +-- TELEGRAM CHAT ID --------------------------------------+
 echo  ^| Dapatkan Chat ID dari @userinfobot di Telegram.        ^|
 echo  ^| Contoh: -123456789 (grup) atau 123456789 (pribadi)     ^|
-echo  ^| (Kosongkan = isi nanti di file .env)                   ^|
 echo  +----------------------------------------------------------+
 set /p CHAT_ID="  Masukkan Telegram Chat ID: "
 echo.
 
-:: -- Tulis ke .env menggunakan redirect >> per baris --
 set ENVFILE=%~dp0.env
 echo # CCTV AI Detection --- Konfigurasi dibuat oleh setup.bat> "!ENVFILE!"
 echo TELEGRAM_BOT_TOKEN=!BOT_TOKEN!>> "!ENVFILE!"
@@ -180,7 +180,7 @@ echo.>> "!ENVFILE!"
 echo # PIN Dashboard (kosongkan = tanpa PIN)>> "!ENVFILE!"
 echo # DASHBOARD_PIN=>> "!ENVFILE!"
 
-echo  [OK] File .env berhasil dibuat di: %~dp0.env
+echo  [OK] File .env berhasil dibuat.
 echo.
 pause
 
@@ -197,44 +197,53 @@ echo.
 
 if "!INSTALL_MODE!"=="2" (
     echo  [--] Mode Minimal -- langkah ini dilewati.
-    echo  Jalankan install_shortcut.bat kapan saja untuk membuat shortcut.
     echo.
     pause
-    goto SELESAI
+    goto TANDAI_SELESAI
 )
 
-echo  Membuat shortcut "CCTV AI" di Desktop agar mudah diakses.
-echo.
-set /p BUAT_SHORTCUT="  Buat shortcut di Desktop? (y/n) lalu tekan Enter: "
+set /p BUAT_SHORTCUT="  Buat shortcut 'CCTV AI' di Desktop? (y/n): "
 if /i "!BUAT_SHORTCUT!"=="y" (
     echo.
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
     if %ERRORLEVEL% EQU 0 (
         echo  [OK] Shortcut berhasil dibuat di Desktop.
     ) else (
-        echo  [PERINGATAN] Gagal membuat shortcut.
-        echo  Jalankan install_shortcut.bat secara manual kapan saja.
+        echo  [PERINGATAN] Gagal membuat shortcut. Tidak masalah, bisa dilewati.
     )
 ) else (
-    echo  Dilewati. Jalankan install_shortcut.bat kapan saja.
+    echo  Dilewati.
 )
 echo.
 pause
 
 :: ================================================================
-:: SELESAI
+:: Tandai setup selesai (sentinel file)
 :: ================================================================
-:SELESAI
+:TANDAI_SELESAI
+echo setup_done > "%~dp0.setup_done"
+
 cls
 echo.
 echo  +========================================================+
-echo  ^|           Setup Selesai! Cara Menjalankan:            ^|
-echo  ^|                                                        ^|
-echo  ^|  1. Double-click "CCTV AI" di Desktop (jika dibuat)   ^|
-echo  ^|  2. ATAU double-click run.py di folder ini             ^|
-echo  ^|  3. ATAU buka CMD dan ketik: python run.py             ^|
-echo  ^|                                                        ^|
-echo  ^|  Dashboard buka otomatis di: http://localhost:8000     ^|
+echo  ^|   Setup Selesai! Menjalankan sistem sekarang...       ^|
 echo  +========================================================+
 echo.
+pause
+
+:: ================================================================
+:: RUN -- Jalankan program
+:: ================================================================
+:RUN
+cls
+echo.
+echo  +========================================================+
+echo  ^|       CCTV AI Detection --- Sistem Berjalan           ^|
+echo  ^|   Dashboard: http://localhost:8000                     ^|
+echo  ^|   Tekan Ctrl+C untuk menghentikan                     ^|
+echo  +========================================================+
+echo.
+python "%~dp0run.py"
+echo.
+echo  [INFO] Sistem dihentikan.
 pause
