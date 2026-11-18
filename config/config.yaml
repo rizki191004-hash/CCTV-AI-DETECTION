@@ -1,28 +1,18 @@
 alarm_gate:
-  confidence_gate: 0.3
+  confidence_gate: 0.35
   max_aspect_ratio: 5.0
   max_bbox_ratio: 0.5
   min_bbox_area: 400
-  min_frames: 1
+  min_frames: 3
 alert_cooldown_sec: 30
 cameras:
 - active_hours: null
-  camera_id: CAMERAS 03
+  camera_id: CAMERAS 02
   enabled: true
-  name: PARKIRAN
-  roi_zones:
-    restricted_zone:
-      points:
-      - - 100
-        - 200
-      - - 400
-        - 200
-      - - 400
-        - 500
-      - - 100
-        - 500
-  rtsp_url: rtsp://admin:password12%23@10.10.11.125:554/Streaming/Channels/101
-confidence_threshold: 0.15
+  name: cctv
+  roi_zones: {}
+  rtsp_url: https://stream.palembang.go.id/cam8/index.m3u8
+confidence_threshold: 0.35
 critical_score_threshold: 80
 database:
   cleanup_days: 30
@@ -43,13 +33,13 @@ motion_sensitivity: low
 motion_var_threshold: 16
 snapshot_interval_sec: 120
 snapshot_quality: 85
-stability_window_sec: 1
+stability_window_sec: 2
 storage:
   auto_delete_threshold: 95
   critical_percent: 90
   retention_days: 30
   warning_percent: 80
-suspicious_score_threshold: 10
+suspicious_score_threshold: 60
 telegram:
   bot_token: ${TELEGRAM_BOT_TOKEN}
   chat_id: ${TELEGRAM_CHAT_ID}

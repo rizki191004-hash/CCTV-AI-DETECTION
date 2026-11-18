@@ -55,7 +55,10 @@ class TrackFeatures:
     bbox_aspect_ratio: float = 1.0  # height / width
     bbox_height_ratio_change: float = 1.0  # current / initial height ratio
     bbox_aspect_stable_sec: float = 0.0  # how long aspect ratio has been low
-    posture_state: str = "unknown"  # "berdiri_diam", "duduk", "berjalan", "unknown"
+    posture_state: str = "STANDING"  # "STANDING", "CROUCHING_CRAWLING", "FALLEN_HORIZONTAL"
+    torso_angle: float = 0.0  # angle from vertical (0=standing upright, 90=lying flat)
+    is_fall_detected: bool = False
+    vertical_velocity_px_s: float = 0.0
 
     # Context features
     confidence: float = 0.0
@@ -227,19 +230,96 @@ class FeatureExtractor:
             features.approaching_zone = approach_zone
             features.approach_speed = approach_speed
 
-            # Posture state detection (berdiri diam / duduk / berjalan)
-            features.posture_state = self._classify_posture(
-                features.speed_px_per_sec,
-                features.bbox_aspect_ratio,
-                features.bbox_height_ratio_change,
-                history.latest_keypoints
+            # Posture state & keypoint fall detection
+            latest_kp = getattr(history, "latest_keypoints", None)
+            posture, torso_ang = self.analyze_posture(
+                latest_kp,
+                bbox=history.latest_bbox
             )
+            features.posture_state = posture
+            features.torso_angle = torso_ang
+
+            # Vertical drop velocity detection
+            vert_vel = 0.0
+            if len(history.points) >= 2:
+                dt = history.points[-1].timestamp - history.points[-2].timestamp
+                if dt > 0:
+                    dy = history.points[-1].centroid[1] - history.points[-2].centroid[1]
+                    vert_vel = dy / dt  # downward in screen coords
+            features.vertical_velocity_px_s = vert_vel
+
+            if features.posture_state == "FALLEN_HORIZONTAL" or (vert_vel > 120.0 and features.torso_angle > 50.0):
+                features.is_fall_detected = True
 
             per_track[track_id] = features
 
         return per_track, scene
 
     # ----- Feature computation helpers -----
+
+    @staticmethod
+    def analyze_posture(
+        keypoints: Optional[np.ndarray],
+        confidence: Optional[np.ndarray] = None,
+        bbox: Optional[Tuple[float, float, float, float]] = None,
+    ) -> Tuple[str, float]:
+        """Analyze 17 COCO keypoints and optional bbox to determine posture state.
+
+        COCO 17 Keypoints:
+          0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear
+          5: left_shoulder, 6: right_shoulder
+          7: left_elbow, 8: right_elbow
+          9: left_wrist, 10: right_wrist
+          11: left_hip, 12: right_hip
+          13: left_knee, 14: right_knee
+          15: left_ankle, 16: right_ankle
+
+        Returns:
+            Tuple of (posture_state, torso_angle_degrees)
+            posture_state: "FALLEN_HORIZONTAL", "CROUCHING_CRAWLING", "STANDING"
+        """
+        torso_angle = 0.0
+
+        if keypoints is not None and len(keypoints) >= 17:
+            sh_valid = True
+            hip_valid = True
+            if confidence is not None and len(confidence) >= 17:
+                sh_valid = bool(confidence[5] > 0.25 and confidence[6] > 0.25)
+                hip_valid = bool(confidence[11] > 0.25 and confidence[12] > 0.25)
+
+            sh_mid_x = (float(keypoints[5][0]) + float(keypoints[6][0])) / 2.0
+            sh_mid_y = (float(keypoints[5][1]) + float(keypoints[6][1])) / 2.0
+            hip_mid_x = (float(keypoints[11][0]) + float(keypoints[12][0])) / 2.0
+            hip_mid_y = (float(keypoints[11][1]) + float(keypoints[12][1])) / 2.0
+
+            if sh_valid and hip_valid and (sh_mid_x > 0 or sh_mid_y > 0) and (hip_mid_x > 0 or hip_mid_y > 0):
+                dx = hip_mid_x - sh_mid_x
+                dy = hip_mid_y - sh_mid_y
+                torso_angle = float(math.degrees(math.atan2(abs(dx), max(abs(dy), 1e-4))))
+
+                if torso_angle >= 60.0:
+                    return "FALLEN_HORIZONTAL", torso_angle
+
+                knee_mid_y = (float(keypoints[13][1]) + float(keypoints[14][1])) / 2.0
+                if knee_mid_y > 0:
+                    hip_knee_dy = abs(knee_mid_y - hip_mid_y)
+                    torso_h = max(abs(dy), 1.0)
+                    if hip_knee_dy < 0.6 * torso_h or (bbox and hip_knee_dy < 0.25 * (bbox[3] - bbox[1])):
+                        return "CROUCHING_CRAWLING", torso_angle
+
+                if torso_angle < 35.0:
+                    return "STANDING", torso_angle
+
+        if bbox:
+            w = max(bbox[2] - bbox[0], 1.0)
+            h = max(bbox[3] - bbox[1], 1.0)
+            aspect = h / w
+            if aspect < 0.7:
+                return "FALLEN_HORIZONTAL", max(torso_angle, 75.0)
+            elif aspect < 1.1:
+                return "CROUCHING_CRAWLING", max(torso_angle, 40.0)
+
+        return "STANDING", torso_angle
 
     def _compute_speed(self, history: TrackHistory) -> float:
         """Compute speed in pixels/second from recent centroids."""

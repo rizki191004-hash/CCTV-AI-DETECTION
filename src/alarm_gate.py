@@ -233,9 +233,19 @@ class AlarmGate:
 
             result.bbox_size_ok = True
 
-            # Stage 4: Aspect Ratio Filter
+            # Stage 4: Aspect Ratio Filter (with bypass for verified fallen individuals)
             aspect_ratio = bbox_h / bbox_w
-            if aspect_ratio < self.MIN_HUMAN_ASPECT or aspect_ratio > self.max_aspect_ratio:
+            is_valid_fall = False
+            if aspect_ratio < self.MIN_HUMAN_ASPECT and getattr(track, "latest_keypoints", None) is not None:
+                try:
+                    from src.feature_extractor import FeatureExtractor
+                    posture, angle = FeatureExtractor.analyze_posture(track.latest_keypoints, bbox=bbox)
+                    if posture == "FALLEN_HORIZONTAL" or angle >= 60.0:
+                        is_valid_fall = True
+                except Exception:
+                    pass
+
+            if not is_valid_fall and (aspect_ratio < self.MIN_HUMAN_ASPECT or aspect_ratio > self.max_aspect_ratio):
                 result.rejection_reason = (
                     f"aspect_ratio_invalid ({aspect_ratio:.2f} not in "
                     f"[{self.MIN_HUMAN_ASPECT:.1f}, {self.max_aspect_ratio:.1f}])"

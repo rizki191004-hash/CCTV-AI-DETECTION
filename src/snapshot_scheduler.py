@@ -13,12 +13,64 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Sequence
 
 import cv2
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def crop_human_region(
+    frame: np.ndarray,
+    bboxes: Sequence[Sequence[float]],
+    padding: float = 0.25,
+) -> np.ndarray:
+    """Crop the region containing detected humans with padding.
+
+    Calculates the union bounding box of all provided human bounding boxes,
+    expands it symmetrically by `padding` (e.g. 0.25 = 25%), clamps to frame
+    boundaries, and returns the cropped image slice.
+
+    Args:
+        frame: BGR frame (H, W, C).
+        bboxes: List of bounding boxes [[x1, y1, x2, y2], ...].
+        padding: Fractional margin to add on all sides (0.25 = 25%).
+
+    Returns:
+        Cropped BGR image focusing on the detected human(s).
+        Returns copy of frame if bboxes is empty or invalid.
+    """
+    if frame is None or len(bboxes) == 0:
+        return frame.copy() if frame is not None else np.zeros((10, 10, 3), dtype=np.uint8)
+
+    h, w = frame.shape[:2]
+
+    # Calculate union bounding box of all detected persons
+    min_x = min(b[0] for b in bboxes)
+    min_y = min(b[1] for b in bboxes)
+    max_x = max(b[2] for b in bboxes)
+    max_y = max(b[3] for b in bboxes)
+
+    box_w = max_x - min_x
+    box_h = max_y - min_y
+
+    if box_w <= 0 or box_h <= 0:
+        return frame.copy()
+
+    # Add protective padding
+    pad_w = box_w * padding
+    pad_h = box_h * padding
+
+    x1 = int(max(0, np.floor(min_x - pad_w)))
+    y1 = int(max(0, np.floor(min_y - pad_h)))
+    x2 = int(min(w, np.ceil(max_x + pad_w)))
+    y2 = int(min(h, np.ceil(max_y + pad_h)))
+
+    if x2 <= x1 or y2 <= y1:
+        return frame.copy()
+
+    return frame[y1:y2, x1:x2].copy()
 
 
 class SnapshotScheduler:
@@ -75,16 +127,6 @@ class SnapshotScheduler:
 
         if current is None or confidence > current[1]:
             save_frame = frame.copy()
-            if bbox is not None:
-                x1, y1, x2, y2 = map(int, bbox)
-                h, w = save_frame.shape[:2]
-                margin = 30
-                x1 = max(0, x1 - margin)
-                y1 = max(0, y1 - margin)
-                x2 = min(w, x2 + margin)
-                y2 = min(h, y2 + margin)
-                save_frame = save_frame[y1:y2, x1:x2]
-                
             self._best_frames[key] = (save_frame, confidence, 0.0)
 
     def capture_snapshot(
@@ -157,6 +199,62 @@ class SnapshotScheduler:
 
         except Exception as e:
             logger.error("[%s] Error saving snapshot: %s", camera_id, e)
+            return None
+
+    def capture_human_crop(
+        self,
+        camera_id: str,
+        event_id: str,
+        bboxes: Sequence[Sequence[float]],
+        frame_override: Optional[np.ndarray] = None,
+        padding: float = 0.25,
+    ) -> Optional[str]:
+        """Capture and save a cropped snapshot focusing specifically on detected humans.
+
+        Args:
+            camera_id: Camera identifier.
+            event_id: Event identifier.
+            bboxes: Bounding boxes of active human tracks.
+            frame_override: Optional frame to use instead of buffered best frame.
+            padding: Padding ratio around bounding boxes (default 25%).
+
+        Returns:
+            File path of saved cropped snapshot, or None on failure.
+        """
+        key = f"{camera_id}:{event_id}"
+        if frame_override is not None:
+            source_frame = frame_override
+        elif key in self._best_frames:
+            source_frame = self._best_frames[key][0]
+        else:
+            logger.warning("[%s] No frame available for human crop snapshot", camera_id)
+            return None
+
+        cropped = crop_human_region(source_frame, bboxes, padding=padding)
+
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        short_event = event_id[:8]
+        filename = f"{camera_id}_{short_event}_{timestamp_str}_crop.jpg"
+        filepath = self.snapshot_dir / filename
+
+        try:
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
+            success = cv2.imwrite(str(filepath), cropped, encode_params)
+            if not success:
+                logger.error("[%s] Failed to write cropped snapshot: %s", camera_id, filepath)
+                return None
+
+            file_size_kb = filepath.stat().st_size / 1024
+            logger.info(
+                "[%s] Human crop snapshot saved: %s (%.1f KB, bboxes=%d)",
+                camera_id,
+                filename,
+                file_size_kb,
+                len(bboxes),
+            )
+            return str(filepath)
+        except Exception as e:
+            logger.error("[%s] Error saving cropped snapshot: %s", camera_id, e)
             return None
 
     def get_snapshot_as_bytes(self, filepath: str) -> Optional[bytes]:

@@ -80,11 +80,25 @@ CREATE TABLE IF NOT EXISTS rule_triggers (
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
 
+-- Person Re-ID identities (cross-camera matching)
+CREATE TABLE IF NOT EXISTS person_identities (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    global_person_id    TEXT NOT NULL,
+    camera_id           TEXT NOT NULL,
+    track_id            INTEGER NOT NULL,
+    prev_camera_id      TEXT,
+    similarity          REAL DEFAULT 0,
+    first_seen_at       TEXT NOT NULL,
+    last_seen_at        TEXT NOT NULL,
+    FOREIGN KEY (camera_id) REFERENCES cameras(camera_id)
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_events_camera     ON events(camera_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_snapshots_event   ON snapshots(event_id);
 CREATE INDEX IF NOT EXISTS idx_tracks_camera     ON tracks(camera_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_triggers_event    ON rule_triggers(event_id);
+CREATE INDEX IF NOT EXISTS idx_reid_person       ON person_identities(global_person_id, last_seen_at);
 """
 
 
@@ -309,6 +323,44 @@ class DBLogger:
             (event_id, rule_id, track_id, score_delta, reason, now),
         )
         await self.db.commit()
+
+    # ----- Re-ID operations -----
+
+    async def log_reid_match(
+        self,
+        global_person_id: str,
+        camera_id: str,
+        track_id: int,
+        prev_camera_id: str = "",
+        similarity: float = 0.0,
+    ) -> None:
+        """Log a Person Re-ID sighting or cross-camera match."""
+        now = datetime.now().isoformat()
+        await self.db.execute(
+            """
+            INSERT INTO person_identities
+                (global_person_id, camera_id, track_id, prev_camera_id, similarity, first_seen_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (global_person_id, camera_id, track_id, prev_camera_id, similarity, now, now),
+        )
+        await self.db.commit()
+
+    async def get_person_history(
+        self, global_person_id: str, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Get sighting history for a globally identified person."""
+        cursor = await self.db.execute(
+            """
+            SELECT * FROM person_identities
+            WHERE global_person_id = ?
+            ORDER BY last_seen_at DESC
+            LIMIT ?
+            """,
+            (global_person_id, limit),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
     # ----- Cleanup operations -----
 

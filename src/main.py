@@ -20,12 +20,19 @@ import numpy as np
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Ensure stdout and stderr are not None when running via pythonw.exe
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 from src.config_loader import ConfigLoader, AppConfig, CameraConfig
 from src.db_logger import DBLogger
 from src.frame_grabber import FrameGrabber
 from src.preprocessor import Preprocessor, compute_black_ratio
 from src.motion_detector import MotionDetector
 from src.person_detector import PersonDetector
+from src.vehicle_detector import VehicleDetector
 from src.tracker import PersonTracker
 from src.feature_extractor import FeatureExtractor
 from src.rule_engine import RuleEngine
@@ -35,6 +42,7 @@ from src.telegram_notifier import TelegramNotifier
 from src.event_recorder import EventRecorder
 from src.alarm_gate import AlarmGate
 from src.storage_manager import StorageManager
+from src.reid_manager import ReIDManager
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -79,6 +87,8 @@ class CameraPipeline:
 
     Orchestrates: grab → preprocess → motion → detect → track → features → rules → events → alerts
     """
+    latest_vehicle_detections = None
+    latest_riders = []
 
     def __init__(
         self,
@@ -90,6 +100,8 @@ class CameraPipeline:
         snapshot_scheduler: SnapshotScheduler,
         telegram: TelegramNotifier,
         db: DBLogger,
+        reid_manager: Optional[ReIDManager] = None,
+        vehicle_detector: Optional[VehicleDetector] = None,
     ):
         self.camera_config = camera_config
         self.app_config = app_config
@@ -97,11 +109,13 @@ class CameraPipeline:
 
         # Shared components
         self.detector = detector
+        self.vehicle_detector = vehicle_detector
         self.event_manager = event_manager
         self.rule_engine = rule_engine
         self.snapshot_scheduler = snapshot_scheduler
         self.telegram = telegram
         self.db = db
+        self.reid_manager = reid_manager
 
         # Per-camera components
         self.grabber = FrameGrabber(
@@ -153,8 +167,17 @@ class CameraPipeline:
         
         self._was_recording = False
         
+        # Camera Health Monitoring
+        self._health_status = "ONLINE"
+        self._offline_since = 0.0
+        self._health_notified = False
+        self._low_fps_notified = False
+        self._last_health_check = time.monotonic()
+        
         # State sharing
         self.latest_track_scores = {}
+        self.latest_vehicle_detections = None
+        self.latest_riders = []
 
     async def run(self, shutdown_event: asyncio.Event) -> None:
         """Main processing loop for this camera."""
@@ -204,6 +227,48 @@ class CameraPipeline:
                         continue
                     self._skip_counter = 0
 
+                # --- 0. Health Monitoring ---
+                current_time = time.monotonic()
+                if current_time - self._last_health_check >= 1.0:
+                    self._last_health_check = current_time
+                    is_connected = self.grabber.is_connected
+                    
+                    if not is_connected:
+                        if self._health_status == "ONLINE":
+                            self._health_status = "OFFLINE"
+                            self._offline_since = current_time
+                        elif self._health_status == "OFFLINE":
+                            offline_duration = current_time - self._offline_since
+                            # Default 60 seconds offline duration before notifying
+                            if offline_duration >= 60.0 and not self._health_notified:
+                                mins = int(offline_duration / 60)
+                                msg = f"Terputus selama {mins} menit" if mins > 0 else f"Terputus selama {int(offline_duration)} detik"
+                                asyncio.create_task(self.telegram.send_health_alert(cam_name, "OFFLINE", msg))
+                                self._health_notified = True
+                    else:
+                        if self._health_status == "OFFLINE":
+                            self._health_status = "ONLINE"
+                            if self._health_notified:
+                                asyncio.create_task(self.telegram.send_health_alert(cam_name, "ONLINE", "Kembali online"))
+                            self._health_notified = False
+                            self._offline_since = 0.0
+                            
+                        # Low FPS check (if connected)
+                        fps = self.grabber.fps
+                        target_fps = self.app_config.detect_fps_target
+                        if fps > 0 and fps < (target_fps * 0.3):
+                            if not self._low_fps_notified:
+                                asyncio.create_task(self.telegram.send_health_alert(
+                                    cam_name, "WARNING", f"FPS terlalu rendah ({fps:.1f} fps / Target {target_fps} fps)"
+                                ))
+                                self._low_fps_notified = True
+                        elif fps >= (target_fps * 0.5):
+                            if self._low_fps_notified:
+                                asyncio.create_task(self.telegram.send_health_alert(
+                                    cam_name, "ONLINE", f"FPS kembali stabil ({fps:.1f} fps)"
+                                ))
+                                self._low_fps_notified = False
+
                 # --- 1. Grab latest frame ---
                 frame, frame_ts = self.grabber.get_latest_frame()
                 if frame is None:
@@ -230,7 +295,20 @@ class CameraPipeline:
                     # Yields to event loop so other cameras can process while YOLO runs
                     detection_result = await self.detector.detect_all_async(processed)
                     all_detections = detection_result.all_detections
+                    self.latest_detections = all_detections
                     person_count = detection_result.person_count # Only humans trigger events
+
+                    # --- 5.5 Vehicle detection & rider association ---
+                    if self.vehicle_detector is not None:
+                        vehicle_result = await self.vehicle_detector.detect_async(processed)
+                        self.latest_vehicle_detections = vehicle_result.vehicles
+                        self.latest_riders = VehicleDetector.find_riders(
+                            detection_result.persons,
+                            vehicle_result.vehicles,
+                        )
+                    else:
+                        self.latest_vehicle_detections = None
+                        self.latest_riders = []
 
                     # --- 6. Tracking ---
                     if len(all_detections) > 0:
@@ -250,6 +328,8 @@ class CameraPipeline:
                     # No motion — update tracker with empty
                     import supervision as sv
                     tracked = self.tracker.update(sv.Detections.empty())
+                    self.latest_vehicle_detections = None
+                    self.latest_riders = []
 
                 # --- 7. Anti-False Alarm Gate ---
                 # Filter tracks through multi-stage validation pipeline
@@ -271,6 +351,44 @@ class CameraPipeline:
                     validated_track_ids=set(validated_tracks.keys()),
                 )
 
+                # --- 8.5 Person Re-Identification (Cross-Camera Matching) ---
+                if self.reid_manager:
+                    # Get the internal track history for validated tracks
+                    active_human_tracks = {
+                        tid: th for tid, th in self.tracker.get_active_tracks().items()
+                        if tid in validated_tracks
+                    }
+                    
+                    # Process Re-ID in background thread
+                    reid_matches = await self.reid_manager.process_tracks(
+                        camera_id=cam_id,
+                        camera_name=cam_name,
+                        frame=frame,
+                        active_tracks=active_human_tracks,
+                    )
+                    
+                    # Handle new cross-camera matches
+                    for match in reid_matches:
+                        # Log to DB
+                        await self.db.log_reid_match(
+                            global_person_id=match.global_person_id,
+                            camera_id=cam_id,
+                            track_id=1,  # We don't have direct access to local track_id in the match result, but it's not strictly necessary for the global log
+                            prev_camera_id=match.prev_camera_id,
+                            similarity=match.similarity,
+                        )
+                        
+                        # Send Telegram notification
+                        asyncio.create_task(
+                            self.telegram.send_reid_alert(
+                                global_person_id=match.global_person_id,
+                                prev_camera_name=match.prev_camera_name,
+                                current_camera_name=cam_name,
+                                similarity=match.similarity,
+                                seconds_since_last=match.seconds_since_last,
+                            )
+                        )
+
                 # --- 9. Rule engine ---
                 track_scores = self.rule_engine.evaluate(
                     track_features, 
@@ -290,31 +408,40 @@ class CameraPipeline:
                 # --- 11. Update best frame for snapshot ---
                 if event and event.is_active:
                     max_conf = 0.0
-                    best_bbox = None
                     if tracked and tracked.confidence is not None and len(tracked.confidence) > 0:
                         max_conf = float(np.max(tracked.confidence))
-                        
-                        # Find the bounding box that encompasses ALL detected people
-                        min_x = np.min(tracked.xyxy[:, 0])
-                        min_y = np.min(tracked.xyxy[:, 1])
-                        max_x = np.max(tracked.xyxy[:, 2])
-                        max_y = np.max(tracked.xyxy[:, 3])
-                        
-                        # Scale bbox to original frame resolution for high quality crop
-                        orig_h, orig_w = frame.shape[:2]
-                        proc_w, proc_h = self.app_config.input_resolution
-                        scale_x = orig_w / proc_w
-                        scale_y = orig_h / proc_h
-                        
-                        best_bbox = np.array([
-                            min_x * scale_x,
-                            min_y * scale_y,
-                            max_x * scale_x,
-                            max_y * scale_y,
-                        ])
+                    
+                    # Annotate frame using the shared Visualizer
+                    from src.visualizer import Visualizer
+                    
+                    orig_h, orig_w = frame.shape[:2]
+                    proc_w, proc_h = self.app_config.input_resolution
+                    scale_x = orig_w / proc_w
+                    scale_y = orig_h / proc_h
+                    
+                    active_tracks = self.tracker.get_active_tracks()
+                    veh_detections = getattr(self, "latest_vehicle_detections", None)
+                    riders = getattr(self, "latest_riders", None)
+                    vehicle_count = len(veh_detections) if veh_detections is not None else 0
+                    
+                    annotated_frame = Visualizer.draw_annotated_frame(
+                        frame=frame,
+                        active_tracks=active_tracks,
+                        track_scores=self.latest_track_scores,
+                        suspicious_threshold=getattr(self.app_config, "suspicious_score_threshold", 60),
+                        person_count=person_count,
+                        animal_count=sum(1 for t in active_tracks.values() if t.class_type == "animal"),
+                        all_detections=self.latest_detections if hasattr(self, "latest_detections") else None,
+                        scale_x=scale_x,
+                        scale_y=scale_y,
+                        vehicle_detections=veh_detections,
+                        riders=riders,
+                        vehicle_count=vehicle_count,
+                        only_riders=True,
+                    )
 
                     self.snapshot_scheduler.update_best_frame(
-                        cam_id, event.event_id, frame, max_conf, best_bbox
+                        cam_id, event.event_id, annotated_frame, max_conf, None
                     )
 
                 # --- 12. Handle pending alerts ---
@@ -375,7 +502,39 @@ class CameraPipeline:
         cam_id = self.camera_id
         cam_name = self.camera_config.name
 
-        # Capture snapshot
+        # Collect bounding boxes for human-focused crop
+        human_bboxes = []
+        if frame is not None and len(frame.shape) >= 2:
+            orig_h, orig_w = frame.shape[:2]
+            proc_w, proc_h = self.app_config.input_resolution if hasattr(self.app_config, "input_resolution") else (640, 360)
+            scale_x = orig_w / proc_w if proc_w > 0 else 1.0
+            scale_y = orig_h / proc_h if proc_h > 0 else 1.0
+
+            active_tracks = self.tracker.get_active_tracks() if hasattr(self.tracker, "get_active_tracks") else {}
+            target_ids = event.track_ids if getattr(event, "track_ids", None) else active_tracks.keys()
+            for tid in target_ids:
+                th = active_tracks.get(tid)
+                if th and getattr(th, "latest_bbox", None):
+                    bx1, by1, bx2, by2 = th.latest_bbox
+                    human_bboxes.append([
+                        bx1 * scale_x,
+                        by1 * scale_y,
+                        bx2 * scale_x,
+                        by2 * scale_y
+                    ])
+
+        # Capture cropped human snapshot specifically for Telegram (must be before capture_snapshot clears buffer)
+        crop_snapshot_path = None
+        if human_bboxes and hasattr(self.snapshot_scheduler, "capture_human_crop"):
+            crop_snapshot_path = self.snapshot_scheduler.capture_human_crop(
+                camera_id=cam_id,
+                event_id=event.event_id,
+                bboxes=human_bboxes,
+                frame_override=None,
+                padding=0.25,
+            )
+
+        # Capture full snapshot (clears buffer)
         snapshot_path = self.snapshot_scheduler.capture_snapshot(
             camera_id=cam_id,
             event_id=event.event_id,
@@ -383,15 +542,23 @@ class CameraPipeline:
             frame_override=None,
         )
 
-        # Send Telegram alert
+        telegram_snapshot = crop_snapshot_path or snapshot_path
+
+        vehicle_info = None
+        riders = getattr(self, "latest_riders", None)
+        if riders:
+            vehicle_info = VehicleDetector.describe_riders(riders)
+
+        # Send Telegram alert (using cropped human image when available)
         await self.telegram.send_alert(
             camera_name=cam_name,
             score=event.score,
             triggered_rules=event.triggered_rules,
             track_ids=list(event.track_ids),
-            snapshot_path=snapshot_path,
+            snapshot_path=telegram_snapshot,
             event_id=event.event_id,
-            alert_level="CRITICAL" if event.is_critical else "SUSPICIOUS"
+            alert_level="CRITICAL" if event.is_critical else "SUSPICIOUS",
+            vehicle_info=vehicle_info,
         )
 
         # Log to database
@@ -475,7 +642,16 @@ class CameraPipeline:
             "grabber": self.grabber.get_health_info(),
             "active_tracks": self.tracker.active_count,
             "total_tracks": self.tracker.total_tracks,
+            "active_vehicles": len(self.latest_vehicle_detections) if self.latest_vehicle_detections is not None else 0,
+            "active_riders": len(self.latest_riders),
         }
+
+
+# ---------------------------------------------------------------------------
+# Browser Auto-Open Helper — delegasi ke src.browser_utils untuk testability
+# ---------------------------------------------------------------------------
+
+from src.browser_utils import open_browser_when_ready as _open_browser_when_ready  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -491,13 +667,18 @@ class CCTVApplication:
         self.db: Optional[DBLogger] = None
         self.telegram: Optional[TelegramNotifier] = None
         self.detector: Optional[PersonDetector] = None
+        self.vehicle_detector: Optional[VehicleDetector] = None
         self.event_manager: Optional[EventManager] = None
         self.rule_engine: Optional[RuleEngine] = None
         self.snapshot_scheduler: Optional[SnapshotScheduler] = None
         self.storage_manager: Optional[StorageManager] = None
+        self.reid_manager: Optional[ReIDManager] = None
+        self.tunnel_manager: Optional[Any] = None
         self.pipelines: Dict[str, CameraPipeline] = {}
         self.pipeline_tasks: Dict[str, asyncio.Task] = {}
         self.shutdown_event = asyncio.Event()
+        # Flag: buka tab tunnel URL di browser hanya sekali (even on reconnect)
+        self._tunnel_browser_opened: bool = False
 
     async def initialize(self) -> None:
         """Initialize all components."""
@@ -509,6 +690,14 @@ class CCTVApplication:
         config_path = self.config_dir / "config" / "config.yaml"
         rules_path = self.config_dir / "config" / "rules.yaml"
         env_path = self.config_dir / ".env"
+
+        # Record PID for process management
+        try:
+            pid_file = self.config_dir / "data" / "cctv.pid"
+            pid_file.parent.mkdir(parents=True, exist_ok=True)
+            pid_file.write_text(str(os.getpid()), encoding="utf-8")
+        except Exception as e:
+            logger.debug("Could not record PID: %s", e)
 
         loader = ConfigLoader(
             config_path=str(config_path),
@@ -540,6 +729,12 @@ class CCTVApplication:
             img_size=self.config.input_resolution[0],
         )
 
+        self.vehicle_detector = VehicleDetector(
+            confidence_threshold=self.config.confidence_threshold,
+            device="cuda" if self.config.device_mode == "cuda" else "cpu",
+            img_size=self.config.input_resolution[0],
+        )
+
         # 5. Initialize rule engine
         self.rule_engine = RuleEngine(
             rules=self.config.rules,
@@ -562,6 +757,11 @@ class CCTVApplication:
             quality=self.config.snapshot_quality,
         )
 
+        # 7.5 Initialize Re-ID Manager
+        self.reid_manager = ReIDManager(
+            device="cuda" if self.config.device_mode == "cuda" else "cpu"
+        )
+
         # 8. Create camera pipelines
         enabled_cameras = [c for c in self.config.cameras if c.enabled]
         logger.info("Creating pipelines for %d cameras", len(enabled_cameras))
@@ -572,10 +772,12 @@ class CCTVApplication:
                 app_config=self.config,
                 detector=self.detector,
                 event_manager=self.event_manager,
+                vehicle_detector=self.vehicle_detector,
                 rule_engine=self.rule_engine,
                 snapshot_scheduler=self.snapshot_scheduler,
                 telegram=self.telegram,
                 db=self.db,
+                reid_manager=self.reid_manager,
             )
             self.pipelines[cam_config.camera_id] = pipeline
 
@@ -587,7 +789,41 @@ class CCTVApplication:
             data_dir=str(self.config_dir / "data")
         )
 
+        # 10. Initialize Cloudflare Tunnel Manager for seamless mobile access
+        try:
+            from src.tunnel_manager import TunnelManager
+            tunnel_token = os.getenv("CLOUDFLARE_TUNNEL_TOKEN")
+            self.tunnel_manager = TunnelManager(
+                port=8000,
+                cloudflared_path="cloudflared.exe",
+                tunnel_token=tunnel_token,
+                on_url_ready=self._on_tunnel_url_ready,
+            )
+        except Exception as e:
+            logger.warning("Failed to initialize TunnelManager: %s", e)
+
         logger.info("Initialization complete — %d pipelines ready", len(self.pipelines))
+
+    async def _on_tunnel_url_ready(self, url: str) -> None:
+        """Invoked when Cloudflare Tunnel establishes a public HTTPS URL."""
+        if self.shutdown_event.is_set():
+            return
+        if self.config:
+            self.config.public_url = url
+        if self.telegram:
+            self.telegram.public_url = url
+            await self.telegram.send_mobile_link(url)
+        logger.info("=" * 60)
+        logger.info("  📱 MOBILE ACCESS URL: %s", url)
+        logger.info("=" * 60)
+
+        # Buka tab browser untuk URL tunnel — hanya sekali meskipun tunnel reconnect
+        if not self._tunnel_browser_opened:
+            self._tunnel_browser_opened = True
+            asyncio.create_task(
+                _open_browser_when_ready(url, delay=0.5),
+                name="open_browser_tunnel",
+            )
 
     async def run(self) -> None:
         """Run all camera pipelines concurrently."""
@@ -630,17 +866,20 @@ class CCTVApplication:
         ))
 
         # Add FastAPI Web Server task
+        server = None
         try:
             import uvicorn
             from src.api.server import create_app
             api_app = create_app(self)
             
-            # Configure uvicorn
+            # Configure uvicorn (log_config=None avoids crash when stdout is None in pythonw)
             config = uvicorn.Config(
                 app=api_app, 
                 host="0.0.0.0", 
                 port=8000, 
-                log_level="error"
+                log_level="error",
+                log_config=None,
+                access_log=False,
             )
             server = uvicorn.Server(config)
             
@@ -650,8 +889,41 @@ class CCTVApplication:
                 name="api_server"
             ))
             logger.info("FastAPI Web Server starting on http://0.0.0.0:8000")
-        except ImportError:
-            logger.error("FastAPI/Uvicorn not installed. Dashboard API disabled.")
+            logger.info("  🖥️  LOCAL  : http://localhost:8000")
+            logger.info("  📱 MOBILE : URL tunnel akan dikirim ke Telegram otomatis")
+
+            # Otomatis buka dashboard di browser lokal setelah server bind (~2 detik)
+            asyncio.create_task(
+                _open_browser_when_ready("http://localhost:8000", delay=2.0),
+                name="open_browser_local",
+            )
+
+        except ImportError as exc:
+            logger.error("FastAPI/Uvicorn or dependency not installed (%s). Dashboard API disabled.", exc, exc_info=True)
+        except Exception as exc:
+            logger.error("Failed to start FastAPI Web Server: %s", exc, exc_info=True)
+
+        # Add Cloudflare Tunnel task for seamless mobile access
+        if self.tunnel_manager:
+            tasks.append(asyncio.create_task(
+                self.tunnel_manager.start(),
+                name="cloudflare_tunnel"
+            ))
+
+        # Add shutdown watcher task to immediately unblock gather and exit components
+        server_instance = server
+
+        async def _shutdown_watcher():
+            await self.shutdown_event.wait()
+            logger.info("Shutdown event triggered — stopping web server and background tasks...")
+            if server_instance is not None:
+                server_instance.should_exit = True
+            for t in tasks:
+                if t is not asyncio.current_task() and not t.done():
+                    t.cancel()
+
+        watcher_task = asyncio.create_task(_shutdown_watcher(), name="shutdown_watcher")
+        tasks.append(watcher_task)
             
         try:
             # Wait for all tasks (or until shutdown)
@@ -666,6 +938,18 @@ class CCTVApplication:
         logger.info("Initiating shutdown sequence...")
         self.shutdown_event.set()
 
+        if self.telegram:
+            try:
+                self.telegram.stop()
+            except Exception as e:
+                logger.debug("Error stopping telegram notifier: %s", e)
+
+        if self.tunnel_manager:
+            try:
+                await self.tunnel_manager.stop()
+            except Exception as e:
+                logger.debug("Error stopping tunnel manager: %s", e)
+
         if self.storage_manager:
             self.storage_manager.stop()
 
@@ -676,6 +960,14 @@ class CCTVApplication:
         # Close database
         if self.db:
             await self.db.close()
+
+        # Remove PID file
+        try:
+            pid_file = self.config_dir / "data" / "cctv.pid"
+            if pid_file.exists():
+                pid_file.unlink()
+        except Exception as e:
+            logger.debug("Could not remove PID file: %s", e)
 
         logger.info("Shutdown complete")
 
@@ -727,6 +1019,7 @@ class CCTVApplication:
             app_config=self.config,
             detector=self.detector,
             event_manager=self.event_manager,
+            vehicle_detector=self.vehicle_detector,
             rule_engine=self.rule_engine,
             snapshot_scheduler=self.snapshot_scheduler,
             telegram=self.telegram,
@@ -874,11 +1167,14 @@ def main():
     # Run async event loop
     try:
         asyncio.run(_run_app(app))
+        logger.info("Application exited cleanly.")
+        os._exit(0)
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
+        os._exit(0)
     except Exception as e:
         logger.error("Fatal error: %s", e, exc_info=True)
-        sys.exit(1)
+        os._exit(1)
 
 
 async def _run_app(app: CCTVApplication) -> None:

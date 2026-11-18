@@ -192,3 +192,24 @@ rules:
     cooldown_sec: 5
     critical: false
     reason: "Orang terdeteksi di kamera"
+
+  # --- Rule 15: Fall / Person Down (CRITICAL) ---
+  - id: fall_detected
+    enabled: true
+    condition:
+      type: fall_detected
+    score_delta: 85
+    cooldown_sec: 120
+    critical: true
+    reason: "Terdeteksi jatuh / orang terkapar"
+
+  # --- Rule 16: Suspicious Crouching / Crawling ---
+  - id: suspicious_crouching
+    enabled: true
+    condition:
+      type: posture_state
+      state: CROUCHING_CRAWLING
+    score_delta: 45
+    cooldown_sec: 45
+    critical: false
+    reason: "Postur mencurigakan (merayap / jongkok)"

@@ -79,6 +79,27 @@ Tabel yang tersedia:
 - `tracks`: (Berisi koordinat lintasan per object/orang - otomatis di-flush berkala).
 - `rule_triggers`: Alasan spesifik dari rule engine saat mendeteksi anomali.
 
+## Berbagi ke Perangkat Lain 📦
+
+Ingin menjalankan aplikasi di PC lain? Ikuti langkah berikut:
+
+1. **Zip seluruh folder project** (lihat [DISTRIBUSI.md](DISTRIBUSI.md) untuk daftar file yang wajib ikut, termasuk model `.pt`)
+2. **Di perangkat penerima:** Install [Python 3.11+](https://www.python.org/downloads/) — centang **"Add Python to PATH"**
+3. **Extract ZIP** lalu **double-click `setup.bat`** — otomatis install semua dependensi & isi konfigurasi Telegram
+4. Jalankan via shortcut Desktop atau `run.py`
+
+> Lihat [DISTRIBUSI.md](DISTRIBUSI.md) untuk panduan lengkap & troubleshooting.
+
+## Shortcut Desktop Windows 🖥️
+
+Agar bisa membuka aplikasi cukup dengan **double-click** di Desktop (tanpa console window):
+
+1. **Cara cepat:** Double-click file `install_shortcut.bat` di root folder project.
+2. Shortcut `CCTV AI.lnk` akan otomatis terbuat di Desktop Anda.
+3. Script generator lengkapnya ada di `scripts/create_desktop_shortcut.ps1` (bisa diedit untuk custom icon atau path Python).
+
+> **Catatan:** Shortcut menggunakan `pythonw.exe` sehingga tidak ada jendela console saat dijalankan.
+
 ## Troublehsooting ❓
 - **Stream Lag/Delay:** Pastikan RTSP menggunakan koneksi stabil. System ini menggunakan *frame dropping* (selalu membaca frame terbaru) untuk meminimalisir lag RTSP bawaan OpenCV.
 - **Telegram tidak mengirim pesan:** Pastikan Token Bot dan Chat ID benar. Jika pesan tertahan, sistem mengimplementasikan *RetryBackoff* dan penanganan *RateLimit* dari Telegram API.

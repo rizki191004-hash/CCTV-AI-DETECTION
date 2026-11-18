@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 # OPTIMASI HLS/RTSP: Paksa FFmpeg membuang buffer agar selalu mendapatkan frame live terbaru
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "fflags;nobuffer|flags;low_delay|sync;ext"
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "fflags;nobuffer|flags;low_delay|sync;ext|rtsp_transport;tcp"
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,16 @@ class FrameGrabber:
     and stores only the most recent frame. This prevents buffer buildup and ensures
     the processing pipeline always works on the latest live frame.
     """
+
+    @staticmethod
+    def parse_stream_source(source):
+        """Parse stream source to integer (for USB webcams) or stripped string."""
+        if isinstance(source, int):
+            return source
+        source_str = str(source).strip()
+        if source_str.isdigit():
+            return int(source_str)
+        return source_str
 
     def __init__(
         self,
@@ -113,11 +123,17 @@ class FrameGrabber:
     def _create_capture(self) -> Optional[cv2.VideoCapture]:
         """Create and configure a VideoCapture instance (supports RTSP & HLS HTTP/HTTPS)."""
         try:
-            if not self.stream_url:
+            if not self.stream_url and self.stream_url != 0:
                 logger.error("[%s] Stream URL is empty", self.camera_id)
                 return None
 
-            cap = cv2.VideoCapture(self.stream_url, cv2.CAP_FFMPEG)
+            source = self.parse_stream_source(self.stream_url)
+            if isinstance(source, int):
+                # Local USB webcam device index
+                cap = cv2.VideoCapture(source)
+            else:
+                # Network stream (RTSP, HLS .m3u8, RTMP, HTTP)
+                cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
 
             if not cap.isOpened():
                 logger.error("[%s] Failed to open stream: %s", self.camera_id, self.stream_url)
@@ -164,7 +180,13 @@ class FrameGrabber:
                 fps_frame_count = 0
 
             try:
-                ret, frame = cap.read()
+                # Zero-lag grab and retrieve: ensures hardware/FFmpeg queue is continuously drained
+                grabbed = cap.grab()
+                if not grabbed:
+                    ret = False
+                    frame = None
+                else:
+                    ret, frame = cap.retrieve()
             except Exception as e:
                 logger.error("[%s] Read error: %s", self.camera_id, e)
                 ret = False

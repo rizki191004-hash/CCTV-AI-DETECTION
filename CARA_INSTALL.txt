@@ -1,0 +1,84 @@
+================================================================
+     CCTV AI DETECTION — CARA INSTALL DI PERANGKAT BARU
+================================================================
+
+PRASYARAT (lakukan SEKALI sebelum mulai):
+-----------------------------------------
+1. Install Python 3.11 atau lebih baru:
+   https://www.python.org/downloads/
+
+   PENTING: Saat instalasi Python, CENTANG kotak:
+   [v] "Add Python to PATH"
+   Jika tidak dicentang, ulangi instalasi Python!
+
+2. Pastikan koneksi internet aktif.
+
+
+LANGKAH INSTALASI:
+------------------
+1. Extract file ZIP ke folder mana saja.
+   Contoh: D:\CCTV AI DETECTION\
+
+2. Buka folder hasil extract.
+
+3. Double-click file:  setup.bat
+
+4. Ikuti instruksi yang muncul di layar:
+   - Proses install otomatis (5-15 menit, tergantung internet)
+   - Masukkan Telegram Bot Token saat diminta
+   - Masukkan Telegram Chat ID saat diminta
+   - Pilih y lalu Enter untuk buat shortcut di Desktop
+
+5. Setelah selesai, tutup jendela setup.
+
+
+CARA MENJALANKAN APLIKASI:
+--------------------------
+Pilih salah satu cara:
+  A. Double-click shortcut "CCTV AI" di Desktop (jika dibuat)
+  B. Double-click file run.py di folder aplikasi
+  C. Buka Command Prompt di folder aplikasi, ketik: python run.py
+
+Dashboard (tampilan web) akan terbuka otomatis di browser:
+  http://localhost:8000
+
+
+CARA MENDAPATKAN TELEGRAM BOT TOKEN & CHAT ID:
+-----------------------------------------------
+Bot Token:
+  1. Buka Telegram, cari @BotFather
+  2. Ketik /newbot
+  3. Ikuti instruksi, copy token yang diberikan
+  Contoh token: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+
+Chat ID:
+  1. Buka Telegram, cari @userinfobot
+  2. Ketik /start
+  3. Bot akan balas dengan ID Anda
+  Contoh: 123456789 (pribadi) atau -123456789 (grup)
+
+
+TROUBLESHOOTING (Jika Ada Masalah):
+------------------------------------
+Masalah: "python tidak dikenali" / python not found
+Solusi : Install ulang Python, centang "Add Python to PATH"
+
+Masalah: Error saat install dependensi (torchreid, dll)
+Solusi : Jalankan setup.bat lagi, atau hubungi pemberi aplikasi
+
+Masalah: Dashboard tidak terbuka di browser
+Solusi : Buka browser, ketik manual: http://localhost:8000
+
+Masalah: Telegram tidak kirim notifikasi
+Solusi : Cek file .env — pastikan Token dan Chat ID benar
+         Edit file .env dengan Notepad
+
+Masalah: Kamera tidak terdeteksi / stream error
+Solusi : Cek URL kamera di file config\config.yaml
+         Pastikan kamera menyala dan terhubung ke jaringan
+
+
+================================================================
+   Butuh bantuan? Hubungi pemberi aplikasi ini.
+================================================================
+

@@ -19,20 +19,26 @@ logger = logging.getLogger(__name__)
 
 # COCO class IDs
 PERSON_CLASS_ID = 0
-BIRD_CLASS_ID = 14
-CAT_CLASS_ID = 15
-DOG_CLASS_ID = 16
+MOTORCYCLE_CLASS_ID = 3
+BENCH_CLASS_ID = 13
+CHAIR_CLASS_ID = 56
+COUCH_CLASS_ID = 57
 
-# All classes we want to detect
-DETECTABLE_CLASSES = [PERSON_CLASS_ID, BIRD_CLASS_ID, CAT_CLASS_ID, DOG_CLASS_ID]
-ANIMAL_CLASS_IDS = {BIRD_CLASS_ID, CAT_CLASS_ID, DOG_CLASS_ID}
+# Classes we want to detect (focused on humans & posture support; animals disabled)
+DETECTABLE_CLASSES = [
+    PERSON_CLASS_ID, 
+    MOTORCYCLE_CLASS_ID, BENCH_CLASS_ID, CHAIR_CLASS_ID, COUCH_CLASS_ID
+]
+ANIMAL_CLASS_IDS = set()  # Animal detection disabled to prevent false positives and clutter
+SUPPORT_CLASS_IDS = {MOTORCYCLE_CLASS_ID, BENCH_CLASS_ID, CHAIR_CLASS_ID, COUCH_CLASS_ID}
 
 # Human-readable class names
 CLASS_NAMES = {
     PERSON_CLASS_ID: "Human",
-    BIRD_CLASS_ID: "Bird",
-    CAT_CLASS_ID: "Cat",
-    DOG_CLASS_ID: "Dog",
+    MOTORCYCLE_CLASS_ID: "Motorcycle",
+    BENCH_CLASS_ID: "Bench",
+    CHAIR_CLASS_ID: "Chair",
+    COUCH_CLASS_ID: "Couch",
 }
 
 
@@ -154,7 +160,7 @@ class PersonDetector:
         return "cpu"
 
     def _warmup(self) -> None:
-        """Run a dummy inference to warm up the model."""
+        """Run a dummy inference to warm up the model with automatic CPU fallback."""
         try:
             dummy = np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8)
             self.model.predict(
@@ -163,9 +169,28 @@ class PersonDetector:
                 conf=self.confidence_threshold,
                 verbose=False,
             )
-            logger.debug("Model warmup complete")
+            logger.debug("Model warmup complete on device: %s", self.device)
         except Exception as e:
-            logger.warning("Model warmup failed (non-critical): %s", e)
+            err_msg = str(e)
+            logger.warning("Model warmup failed on %s: %s", self.device, err_msg)
+            # Automatic fallback to CPU if GPU / Intel kernel failure occurs
+            if self.device != "cpu":
+                logger.warning(
+                    "Detected accelerator failure (%s). Automatically falling back to CPU for inference stability.",
+                    self.device,
+                )
+                self.device = "cpu"
+                try:
+                    dummy = np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8)
+                    self.model.predict(
+                        dummy,
+                        device="cpu",
+                        conf=self.confidence_threshold,
+                        verbose=False,
+                    )
+                    logger.info("Successfully recovered and warmed up model on CPU fallback.")
+                except Exception as cpu_err:
+                    logger.warning("CPU fallback warmup failed: %s", cpu_err)
 
     def detect(self, frame: np.ndarray) -> sv.Detections:
         """Run person-only detection on a frame (backward compatible).

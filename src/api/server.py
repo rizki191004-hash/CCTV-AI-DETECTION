@@ -5,6 +5,7 @@ The user only needs to run `python src/main.py` and open http://localhost:8000.
 """
 
 import logging
+import os
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from src.api.routes import router
+from src.api.auth import PinAuthManager, PinAuthMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,37 @@ def create_app(cctv_app) -> FastAPI:
 
     # Attach the main CCTV application state so routes can access it
     api_app.state.cctv_app = cctv_app
+
+    # PIN Authentication Gate
+    dashboard_pin = os.getenv("DASHBOARD_PIN")
+    auth_manager = PinAuthManager(pin=dashboard_pin)
+    api_app.state.auth_manager = auth_manager
+
+    @api_app.post("/api/auth/login")
+    async def login_pin(request: Request):
+        try:
+            body = await request.json()
+            candidate_pin = body.get("pin", "")
+        except Exception:
+            candidate_pin = ""
+        client_ip = request.client.host if request.client else "unknown"
+        if auth_manager.verify_pin(candidate_pin, client_ip=client_ip):
+            token = auth_manager.create_session()
+            resp = JSONResponse({"status": "ok", "token": token})
+            resp.set_cookie("cctv_session", token, max_age=2592000, httponly=False, samesite="lax")
+            return resp
+        return JSONResponse({"status": "error", "message": "Invalid PIN"}, status_code=401)
+
+    @api_app.get("/api/auth/status")
+    async def auth_status(request: Request):
+        token = request.cookies.get("cctv_session") or request.query_params.get("token")
+        return {
+            "pin_required": auth_manager.is_enabled,
+            "authenticated": auth_manager.is_valid_session(token),
+        }
+
+    # PinAuthMiddleware secures all endpoints and serves Mobile Login HTML when unauthenticated
+    api_app.add_middleware(PinAuthMiddleware, auth_manager=auth_manager)
 
     # Include API routes under /api
     api_app.include_router(router, prefix="/api")

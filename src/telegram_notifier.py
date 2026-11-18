@@ -91,6 +91,11 @@ class TelegramNotifier:
             logger.error("Failed to initialize Telegram bot: %s", e)
             self._enabled = False
 
+    def stop(self) -> None:
+        """Disable notifier to suppress any outgoing alerts or messages during/after shutdown."""
+        self._enabled = False
+        logger.info("TelegramNotifier stopped.")
+
     def _escape_md(self, text: str) -> str:
         """Escape special characters for Telegram MarkdownV2."""
         chars = r"_*[]()~`>#+-=|{}.!"
@@ -175,41 +180,67 @@ class TelegramNotifier:
         self._error_count += 1
         return False
 
-    async def send_alert(
+    def format_mobile_link_message(self, public_url: str) -> str:
+        """Format an announcement message containing the mobile dashboard access link."""
+        local_time_esc = self._escape_md(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        url_esc = self._escape_md(public_url)
+        return (
+            f"📱 *CCTV Mobile Dashboard Online*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🕐 *Time:* {local_time_esc}\n"
+            f"🌐 *Public Link:* [Buka Dashboard]({public_url})\n"
+            f"🔗 *URL:* `{url_esc}`\n\n"
+            f"💡 *Akses HP:* Klik tautan di atas untuk memantau kamera CCTV langsung dari ponsel Anda\\."
+        )
+
+    async def send_mobile_link(self, public_url: str) -> bool:
+        """Send mobile access link directly to Telegram."""
+        if not self._enabled or self._bot is None:
+            return False
+
+        message = self.format_mobile_link_message(public_url)
+        from telegram.constants import ParseMode
+
+        async with self._send_lock:
+            try:
+                await self._wait_rate_limit()
+                await self._bot.send_message(
+                    chat_id=self.chat_id,
+                    text=message,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    disable_web_page_preview=False,
+                )
+                logger.info("Mobile access link successfully sent to Telegram: %s", public_url)
+                return True
+            except Exception as e:
+                logger.error("Failed to send mobile access link to Telegram: %s", e)
+                return False
+
+    def format_alert_caption(
         self,
         camera_name: str,
         score: float,
         triggered_rules: List[str],
         track_ids: List[int],
-        snapshot_path: Optional[str] = None,
         event_id: str = "",
         alert_level: str = "SUSPICIOUS",
-    ) -> bool:
-        """Send a suspicious activity alert with optional snapshot photo.
-
-        Args:
-            camera_name: Human-readable camera name.
-            score: Suspicion score (0-100).
-            triggered_rules: List of rule IDs that triggered.
-            track_ids: List of tracked person IDs.
-            snapshot_path: Path to snapshot image file.
-            event_id: Event UUID (for reference).
-
-        Returns:
-            True if sent successfully, False otherwise.
-        """
-        if not self._enabled or self._bot is None:
-            logger.debug("Telegram disabled — alert not sent")
-            return False
-
+        posture: Optional[str] = None,
+        vehicle_info: Optional[str] = None,
+    ) -> str:
+        """Format MarkdownV2 alert caption for Telegram notifications."""
         local_time_esc = self._escape_md(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         rules_str = ", ".join(triggered_rules) if triggered_rules else "N/A"
         tracks_str = str(list(track_ids)) if track_ids else "[]"
         score_esc = self._escape_md(f"{score:.0f}/100")
-        event_esc = self._escape_md(event_id[:8])
+        event_esc = self._escape_md(event_id[:8]) if event_id else "N/A"
 
-        title = "🚨 *CRITICAL DETECTED*" if alert_level.upper() == "CRITICAL" else "⚠️ *SUSPICIOUS DETECTED*"
-        
+        if "fall_detected" in triggered_rules or (posture and "FALL" in posture.upper()):
+            title = "🚨 *[FALL DETECTED / DARURAT]*"
+        elif alert_level.upper() == "CRITICAL":
+            title = "🚨 *CRITICAL DETECTED*"
+        else:
+            title = "⚠️ *SUSPICIOUS DETECTED*"
+
         caption = (
             f"{title}\n"
             f"━━━━━━━━━━━━━━━━━━\n"
@@ -220,8 +251,44 @@ class TelegramNotifier:
             f"👤 *Track IDs:* {self._escape_md(tracks_str)}\n"
             f"🔖 *Event:* {event_esc}"
         )
+        if posture:
+            caption += f"\n🧍 *Postur:* {self._escape_md(posture)}"
+
+        if vehicle_info:
+            caption += f"\n🚗 *Vehicle:* {self._escape_md(vehicle_info)}"
+
         if self.public_url:
             caption += f"\n🔗 *Dashboard:* [Buka Link]({self.public_url})"
+
+        return caption
+
+    async def send_alert(
+        self,
+        camera_name: str,
+        score: float,
+        triggered_rules: List[str],
+        track_ids: List[int],
+        snapshot_path: Optional[str] = None,
+        event_id: str = "",
+        alert_level: str = "SUSPICIOUS",
+        posture: Optional[str] = None,
+        vehicle_info: Optional[str] = None,
+    ) -> bool:
+        """Send a suspicious activity alert with optional snapshot photo."""
+        if not self._enabled or self._bot is None:
+            logger.debug("Telegram disabled — alert not sent")
+            return False
+
+        caption = self.format_alert_caption(
+            camera_name=camera_name,
+            score=score,
+            triggered_rules=triggered_rules,
+            track_ids=track_ids,
+            event_id=event_id,
+            alert_level=alert_level,
+            posture=posture,
+            vehicle_info=vehicle_info,
+        )
 
         return await self._send_message_with_photo(caption, snapshot_path)
 
@@ -297,6 +364,97 @@ class TelegramNotifier:
             f"🕐 *Resolved at:* {local_time_esc}\n"
             f"⏱️ *Duration:* {duration_min:.1f} minutes\n"
             f"📸 *Snapshots:* {total_snapshots}"
+        )
+        if self.public_url:
+            text += f"\n🔗 *Dashboard:* [Buka Link]({self.public_url})"
+
+        return await self._send_text(text)
+
+    async def send_health_alert(
+        self,
+        camera_name: str,
+        status: str,
+        message: str
+    ) -> bool:
+        """Send a health status alert (e.g., camera offline/online).
+
+        Args:
+            camera_name: Camera name.
+            status: Health status ("OFFLINE", "ONLINE", or "WARNING").
+            message: Descriptive message.
+
+        Returns:
+            True if sent successfully.
+        """
+        if not self._enabled or self._bot is None:
+            return False
+
+        local_time_esc = self._escape_md(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        
+        status_upper = status.upper()
+        if status_upper == "OFFLINE":
+            icon = "⚠️"
+            title = "*CAMERA OFFLINE*"
+        elif status_upper == "ONLINE":
+            icon = "✅"
+            title = "*CAMERA ONLINE*"
+        else:
+            icon = "ℹ️"
+            title = f"*{self._escape_md(status_upper)}*"
+
+        text = (
+            f"{icon} {title}\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📹 *Camera:* {self._escape_md(camera_name)}\n"
+            f"🕐 *Time:* {local_time_esc}\n"
+            f"💬 *Status:* {self._escape_md(message)}"
+        )
+        if self.public_url:
+            text += f"\n🔗 *Dashboard:* [Buka Link]({self.public_url})"
+
+        return await self._send_text(text)
+
+    async def send_reid_alert(
+        self,
+        global_person_id: str,
+        prev_camera_name: str,
+        current_camera_name: str,
+        similarity: float,
+        seconds_since_last: float,
+    ) -> bool:
+        """Send a Person Re-ID cross-camera notification.
+
+        Args:
+            global_person_id: Global person ID (e.g., 'P-0042').
+            prev_camera_name: Camera where the person was last seen.
+            current_camera_name: Camera where the person is now detected.
+            similarity: Cosine similarity score (0-1).
+            seconds_since_last: Seconds since last seen on the previous camera.
+
+        Returns:
+            True if sent successfully.
+        """
+        if not self._enabled or self._bot is None:
+            return False
+
+        local_time_esc = self._escape_md(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+        # Format time since last seen
+        if seconds_since_last >= 3600:
+            time_ago = f"{seconds_since_last / 3600:.1f} jam lalu"
+        elif seconds_since_last >= 60:
+            time_ago = f"{int(seconds_since_last / 60)} menit lalu"
+        else:
+            time_ago = f"{int(seconds_since_last)} detik lalu"
+
+        text = (
+            f"🔄 *PERSON RE\\-IDENTIFIED*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👤 *Person ID:* {self._escape_md(global_person_id)}\n"
+            f"📹 *Terakhir:* {self._escape_md(prev_camera_name)} \\({self._escape_md(time_ago)}\\)\n"
+            f"📹 *Sekarang:* {self._escape_md(current_camera_name)}\n"
+            f"🎯 *Similarity:* {self._escape_md(f'{similarity:.0%}')}\n"
+            f"🕐 *Time:* {local_time_esc}"
         )
         if self.public_url:
             text += f"\n🔗 *Dashboard:* [Buka Link]({self.public_url})"

@@ -1,10 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { Camera, AlertTriangle, Activity, CheckCircle, Settings, Plus, Trash2, Edit3, Send, Eye, EyeOff, RefreshCw, Bell, BarChart2, Video, X, HardDrive, Cpu, Server, WifiOff } from 'lucide-react';
+import { Camera, AlertTriangle, Activity, CheckCircle, Settings, Plus, Trash2, Edit3, Send, Eye, EyeOff, RefreshCw, Bell, BarChart2, Video, X, HardDrive, Cpu, Server, WifiOff, Maximize2, Minimize2, Power } from 'lucide-react';
 
 const API_BASE = "/api";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('live');
+  const [showShutdownModal, setShowShutdownModal] = useState(false);
+  const [isShuttingDown, setIsShuttingDown] = useState(false);
+  const [backendOnline, setBackendOnline] = useState(true);
+
+  useEffect(() => {
+    const checkBackend = () => {
+      fetch(`${API_BASE}/status`)
+        .then(r => {
+          if (r.ok) setBackendOnline(true);
+          else setBackendOnline(false);
+        })
+        .catch(() => setBackendOnline(false));
+    };
+    checkBackend();
+    const interval = setInterval(checkBackend, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const confirmShutdown = async () => {
+    setIsShuttingDown(true);
+    setShowShutdownModal(false);
+    setBackendOnline(false);
+    try {
+      await fetch(`${API_BASE}/system/shutdown`, { method: 'POST' });
+    } catch {
+      // Expected as backend stops
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans flex">
@@ -31,12 +59,24 @@ export default function App() {
         {/* Header */}
         <header className="h-16 border-b border-gray-800 bg-gray-900/50 backdrop-blur flex items-center px-6 justify-between">
           <h2 className="text-lg font-semibold capitalize">{activeTab === 'live' ? 'Live View' : activeTab === 'cameras' ? 'Camera Management' : activeTab === 'telegram' ? 'Telegram Notifications' : activeTab} Dashboard</h2>
-          <div className="flex items-center gap-2">
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-            </span>
-            <span className="text-sm text-gray-400">Backend Connected</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="flex h-3 w-3 relative">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${backendOnline ? 'bg-green-400 opacity-75' : 'bg-red-400 opacity-75'}`}></span>
+                <span className={`relative inline-flex rounded-full h-3 w-3 ${backendOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
+              </span>
+              <span className="text-sm text-gray-400 hidden sm:inline">
+                {backendOnline ? 'Backend Terhubung' : 'Terputus / Offline'}
+              </span>
+            </div>
+            <button
+              onClick={() => setShowShutdownModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 text-xs font-semibold transition-colors"
+              title="Hentikan dan Matikan Seluruh Sistem CCTV"
+            >
+              <Power size={13} />
+              <span className="hidden sm:inline">Matikan CCTV</span>
+            </button>
           </div>
         </header>
 
@@ -49,6 +89,51 @@ export default function App() {
           {activeTab === 'telegram' && <TelegramConfig />}
           {activeTab === 'settings' && <SettingsView />}
         </div>
+
+        {/* Confirmation Modal */}
+        {showShutdownModal && !isShuttingDown && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl max-w-sm w-full p-6 text-center shadow-2xl">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                <Power size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Matikan Sistem CCTV AI?</h3>
+              <p className="text-sm text-gray-400 mb-6">
+                Apakah Anda yakin ingin menghentikan seluruh deteksi CCTV dan Cloudflare Tunnel? Anda dapat menyalakannya kembali kapan saja dari shortcut di Desktop.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowShutdownModal(false)}
+                  className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={confirmShutdown}
+                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-colors flex items-center gap-1.5"
+                >
+                  <Power size={14} /> Ya, Matikan Sekarang
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Shutdown Completed Screen */}
+        {isShuttingDown && (
+          <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center mb-4 text-red-400">
+              <Power size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">CCTV AI Telah Dimatikan</h2>
+            <p className="text-gray-400 max-w-md text-sm mb-6">
+              Seluruh proses kamera, model deteksi AI, dan Cloudflare Tunnel telah dihentikan secara bersih. Tidak ada perintah yang berjalan lagi di latar belakang komputer Anda.
+            </p>
+            <span className="text-xs text-gray-500 font-mono">
+              Untuk menyalakan kembali, cukup klik 2x icon "CCTV AI" di Desktop Anda.
+            </span>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -206,8 +291,54 @@ function SystemHealthBanner() {
   );
 }
 
+function CameraStreamPlayer({ cameraId, name, isFullscreen = false }: { cameraId: string; name: string; isFullscreen?: boolean }) {
+  const [retryKey, setRetryKey] = useState<number>(0);
+  const [hasError, setHasError] = useState<boolean>(false);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    let timer: any;
+    if (hasError) {
+      // Auto-retry stream every 2.5 seconds with cache-busting timestamp
+      timer = setTimeout(() => {
+        setRetryKey(k => k + 1);
+        setHasError(false);
+      }, 2500);
+    }
+    return () => clearTimeout(timer);
+  }, [hasError]);
+
+  return (
+    <div className={`relative w-full h-full flex items-center justify-center bg-black overflow-hidden ${isFullscreen ? 'rounded-lg' : ''}`}>
+      <img
+        key={retryKey}
+        src={`${API_BASE}/stream/${cameraId}?t=${retryKey}`}
+        alt={`Stream ${name}`}
+        className={`w-full h-full object-contain select-none transition-opacity duration-300 ${isLoaded && !hasError ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={() => {
+          setIsLoaded(true);
+          setHasError(false);
+        }}
+        onError={() => {
+          setHasError(true);
+          setIsLoaded(false);
+        }}
+      />
+      {(!isLoaded || hasError) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-950/85 text-gray-300 gap-2.5 z-0 select-none">
+          <RefreshCw className="w-7 h-7 text-blue-500 animate-spin" />
+          <span className="text-xs sm:text-sm font-medium tracking-wide">
+            {hasError ? 'Menghubungkan ulang ke stream...' : 'Memuat video stream...'}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LiveView() {
   const [cameras, setCameras] = useState<any[]>([]);
+  const [fullscreenCamId, setFullscreenCamId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStatus = () => {
@@ -217,6 +348,32 @@ function LiveView() {
     const interval = setInterval(fetchStatus, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && fullscreenCamId) {
+        setFullscreenCamId(null);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [fullscreenCamId]);
+
+  const toggleFullscreen = (camId: string) => {
+    if (fullscreenCamId === camId) {
+      setFullscreenCamId(null);
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } else {
+      setFullscreenCamId(camId);
+    }
+  };
+
+  const fullscreenCam = cameras.find(c => c.camera_id === fullscreenCamId) || null;
 
   return (
     <div className="space-y-6">
@@ -233,31 +390,108 @@ function LiveView() {
               <div className="flex items-center gap-2">
                 <Camera size={16} className="text-gray-400" />
                 <span className="font-medium text-gray-200">{cam.name}</span>
+                <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-600/20 text-red-400 border border-red-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                  LIVE
+                </span>
               </div>
-              <div className="flex gap-3 text-xs font-mono">
+              <div className="flex items-center gap-3 text-xs font-mono">
                 <span className={cam.state !== 'NORMAL' ? 'text-red-400' : 'text-green-400'}>{cam.state}</span>
                 <span className="text-blue-400">{cam.fps} FPS</span>
                 <span className="text-purple-400">{cam.active_tracks} Tracks</span>
+                {cam.active_vehicles > 0 && (
+                  <span className={cam.active_riders > 0 ? "text-red-400 font-bold animate-pulse" : "text-amber-400"}>
+                    🚗 {cam.active_vehicles}{cam.active_riders > 0 ? ` (${cam.active_riders} Rider)` : ""}
+                  </span>
+                )}
+                <button
+                  onClick={() => toggleFullscreen(cam.camera_id)}
+                  title="Buka Fullscreen"
+                  className="p-1.5 rounded hover:bg-gray-700/80 text-gray-300 hover:text-white transition-colors ml-1"
+                >
+                  <Maximize2 size={15} />
+                </button>
               </div>
             </div>
-            <div className="relative bg-black aspect-video flex items-center justify-center">
-              <img
-                src={`${API_BASE}/stream/${cam.camera_id}`}
-                alt={`Stream ${cam.name}`}
-                className="w-full h-full object-contain"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
+            <div 
+              className="relative bg-black aspect-video flex items-center justify-center group cursor-pointer"
+              onDoubleClick={() => toggleFullscreen(cam.camera_id)}
+              title="Double-click untuk Fullscreen"
+            >
+              <CameraStreamPlayer cameraId={cam.camera_id} name={cam.name} />
               {cam.state !== 'NORMAL' && (
-                <div className="absolute top-4 right-4 bg-red-500/80 backdrop-blur text-white px-3 py-1 rounded-full text-sm font-bold animate-pulse flex items-center gap-1">
+                <div className="absolute top-4 right-4 bg-red-500/80 backdrop-blur text-white px-3 py-1 rounded-full text-sm font-bold animate-pulse flex items-center gap-1 z-10">
                   <AlertTriangle size={14} /> {cam.state}
                 </div>
               )}
-              {/* Show offline overlay if backend reports camera is not connected but UI hasn't caught up via status */}
-              {/* (We rely on Health Banner for actual offline status, but this provides visual feedback on the feed) */}
+              {/* Fullscreen hover overlay button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleFullscreen(cam.camera_id); }}
+                className="absolute bottom-3 right-3 bg-gray-900/80 hover:bg-gray-800 text-white text-xs px-2.5 py-1.5 rounded-lg border border-gray-700 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur shadow-lg z-10"
+                title="Buka Fullscreen"
+              >
+                <Maximize2 size={13} /> Fullscreen
+              </button>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Fullscreen Modal View */}
+      {fullscreenCam && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between">
+          {/* Header Bar */}
+          <div className="p-3 sm:p-4 bg-gray-900/90 backdrop-blur border-b border-gray-800 flex justify-between items-center z-10">
+            <div className="flex items-center gap-3">
+              <Camera className="text-blue-500 w-5 h-5 flex-shrink-0" />
+              <span className="font-bold text-base sm:text-lg text-white tracking-wide">{fullscreenCam.name}</span>
+              <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-red-600/20 text-red-400 border border-red-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                LIVE
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 ${
+                fullscreenCam.state !== 'NORMAL'
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse'
+                  : 'bg-green-500/20 text-green-400 border border-green-500/30'
+              }`}>
+                {fullscreenCam.state !== 'NORMAL' && <AlertTriangle size={12} />}
+                {fullscreenCam.state}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 sm:gap-4 font-mono text-xs sm:text-sm">
+              <span className="text-blue-400 font-semibold">{fullscreenCam.fps} FPS</span>
+              <span className="text-purple-400 font-semibold">{fullscreenCam.active_tracks} Tracks</span>
+              {fullscreenCam.active_vehicles > 0 && (
+                <span className={fullscreenCam.active_riders > 0 ? "text-red-400 font-bold animate-pulse" : "text-amber-400"}>
+                  🚗 {fullscreenCam.active_vehicles}{fullscreenCam.active_riders > 0 ? ` (${fullscreenCam.active_riders} Rider)` : ""}
+                </span>
+              )}
+              <button
+                onClick={() => setFullscreenCamId(null)}
+                className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white transition-colors flex items-center gap-1.5 border border-gray-700 text-xs sm:text-sm font-sans"
+                title="Tutup Fullscreen (ESC)"
+              >
+                <Minimize2 size={16} />
+                <span className="hidden sm:inline">Tutup (ESC)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Fullscreen Video Stream */}
+          <div 
+            className="flex-1 relative flex items-center justify-center p-2 sm:p-4 overflow-hidden"
+            onDoubleClick={() => setFullscreenCamId(null)}
+            title="Double-click untuk keluar dari fullscreen"
+          >
+            <CameraStreamPlayer cameraId={fullscreenCam.camera_id} name={fullscreenCam.name} isFullscreen />
+            {fullscreenCam.state !== 'NORMAL' && (
+              <div className="absolute top-6 right-6 bg-red-500/80 backdrop-blur text-white px-4 py-1.5 rounded-full text-sm font-bold animate-pulse flex items-center gap-1.5 shadow-xl">
+                <AlertTriangle size={16} /> {fullscreenCam.state}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -372,6 +606,27 @@ function CameraManager() {
   const [editMode, setEditMode] = useState<string | null>(null);
   const [formData, setFormData] = useState({ camera_id: '', name: '', rtsp_url: '', enabled: true });
   const [message, setMessage] = useState<{type: string, text: string} | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<any>(null);
+
+  const handleProbe = async () => {
+    if (!formData.rtsp_url.trim()) return;
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/cameras/probe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stream_url: formData.rtsp_url.trim() }),
+      });
+      const data = await res.json();
+      setProbeResult(data);
+    } catch (e: any) {
+      setProbeResult({ online: false, message: 'Gagal terhubung ke backend server: ' + e.message });
+    } finally {
+      setProbing(false);
+    }
+  };
 
   const fetchCameras = () => {
     setLoading(true);
@@ -390,6 +645,7 @@ function CameraManager() {
         setMessage({ type: 'success', text: data.message });
         setShowForm(false); setEditMode(null);
         setFormData({ camera_id: '', name: '', rtsp_url: '', enabled: true });
+        setProbeResult(null);
         fetchCameras();
       } else {
         setMessage({ type: 'error', text: data.detail || 'Error saving camera' });
@@ -424,7 +680,7 @@ function CameraManager() {
 
       {/* Add camera button */}
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">RTSP Camera Sources</h3>
+        <h3 className="text-lg font-semibold">Camera & Stream Sources (RTSP, HLS, Webcam)</h3>
         <button onClick={() => { setShowForm(!showForm); setEditMode(null); setFormData({ camera_id: '', name: '', rtsp_url: '', enabled: true }); }}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Add Camera
@@ -450,10 +706,88 @@ function CameraManager() {
             </div>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">RTSP URL</label>
-            <input type="text" value={formData.rtsp_url} onChange={e => setFormData({ ...formData, rtsp_url: e.target.value })}
-              placeholder=""
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none font-mono text-sm" />
+            <div className="flex flex-wrap justify-between items-center gap-2 mb-1.5">
+              <label className="block text-sm text-gray-400">Stream URL / Device Index</label>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-gray-500 text-[11px]">Palembang:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({ camera_id: formData.camera_id || "cam_charitas", name: formData.name || "CCTV SP Charitas", rtsp_url: "https://stream.palembang.go.id/cam8/index.m3u8", enabled: true });
+                    setProbeResult(null);
+                  }}
+                  className="px-2 py-0.5 bg-cyan-950/60 hover:bg-cyan-900/80 rounded text-cyan-300 border border-cyan-700/50 transition-colors"
+                  title="CCTV SP Charitas Palembang (1080p Aktif)"
+                >
+                  🏙️ SP Charitas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({ camera_id: formData.camera_id || "cam_polda", name: formData.name || "CCTV Simpang Polda", rtsp_url: "https://stream.palembang.go.id/cam3/index.m3u8", enabled: true });
+                    setProbeResult(null);
+                  }}
+                  className="px-2 py-0.5 bg-cyan-950/60 hover:bg-cyan-900/80 rounded text-cyan-300 border border-cyan-700/50 transition-colors"
+                  title="CCTV Simpang Polda Palembang (1080p Aktif)"
+                >
+                  🏙️ Simpang Polda
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({ camera_id: formData.camera_id || "cam_bkb", name: formData.name || "CCTV Benteng Kuto Besak", rtsp_url: "https://stream.palembang.go.id/cam2/index.m3u8", enabled: true });
+                    setProbeResult(null);
+                  }}
+                  className="px-2 py-0.5 bg-cyan-950/60 hover:bg-cyan-900/80 rounded text-cyan-300 border border-cyan-700/50 transition-colors"
+                  title="CCTV Benteng Kuto Besak (1080p Aktif)"
+                >
+                  🏙️ BKB
+                </button>
+                <span className="text-gray-600">|</span>
+                <button
+                  type="button"
+                  onClick={() => { setFormData({ ...formData, rtsp_url: "0" }); setProbeResult(null); }}
+                  className="px-2 py-0.5 bg-gray-800 hover:bg-gray-700 rounded text-blue-400 border border-gray-700 transition-colors"
+                  title="Gunakan webcam USB lokal (0)"
+                >
+                  💻 Webcam (0)
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <input type="text" value={formData.rtsp_url} onChange={e => { setFormData({ ...formData, rtsp_url: e.target.value }); setProbeResult(null); }}
+                placeholder="rtsp://... atau https://.../stream.m3u8 atau 0 untuk webcam USB" 
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none font-mono text-sm" />
+              <button
+                type="button"
+                onClick={handleProbe}
+                disabled={probing || !formData.rtsp_url.trim()}
+                className="px-3.5 py-2.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors flex-shrink-0"
+                title="Cek apakah stream aktif dan dapat diakses sebelum disimpan"
+              >
+                {probing ? (
+                  <span className="flex items-center gap-1">
+                    <RefreshCw size={13} className="animate-spin" /> Menguji...
+                  </span>
+                ) : (
+                  <span>⚡ Tes Koneksi</span>
+                )}
+              </button>
+            </div>
+            {/* Probe Result Diagnostic Banner */}
+            {probeResult && (
+              <div className={`mt-2 p-3 rounded-lg text-xs flex items-start gap-2 border ${
+                probeResult.online 
+                  ? "bg-green-500/15 border-green-500/40 text-green-300"
+                  : "bg-red-500/15 border-red-500/40 text-red-300"
+              }`}>
+                <span className="font-bold text-sm leading-none mt-0.5">{probeResult.online ? "✅" : "⚠️"}</span>
+                <div>
+                  <div className="font-semibold">{probeResult.online ? "Stream Terverifikasi Aktif" : "Stream Tidak Dapat Diakses"}</div>
+                  <div className="mt-0.5 text-gray-300">{probeResult.message}</div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 cursor-pointer">

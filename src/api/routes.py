@@ -10,7 +10,10 @@ import logging
 import os
 import re
 import psutil
-import GPUtil
+try:
+    import GPUtil
+except ImportError:
+    GPUtil = None
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -22,6 +25,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 
 from src.main import CCTVApplication
+from src.visualizer import Visualizer
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +43,8 @@ class CameraStatus(BaseModel):
     fps: float
     active_tracks: int
     is_connected: bool
+    active_vehicles: int = 0
+    active_riders: int = 0
 
 class CameraAddRequest(BaseModel):
     camera_id: str
@@ -59,6 +65,16 @@ class CameraAddRequest(BaseModel):
     roi_zones: Optional[dict] = None
     crossing_lines: Optional[dict] = None
 
+class StreamProbeRequest(BaseModel):
+    stream_url: str
+
+class StreamProbeResponse(BaseModel):
+    online: bool
+    source_type: str
+    resolution: str
+    fps: float
+    message: str
+
 class TelegramConfigRequest(BaseModel):
     bot_token: str
     chat_id: str
@@ -77,8 +93,8 @@ async def mjpeg_generator(app: CCTVApplication, camera_id: str):
         yield b""
         return
 
-    # Frame interval for ~15 FPS stream to the browser
-    frame_time = 1.0 / 15.0
+    # Frame interval for ~20 FPS low-latency stream to the browser
+    frame_time = 1.0 / 20.0
 
     while not app.shutdown_event.is_set():
         start_time = asyncio.get_event_loop().time()
@@ -127,110 +143,28 @@ async def mjpeg_generator(app: CCTVApplication, camera_id: str):
                     cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 200, 255), 1)
                     cv2.putText(display_frame, f"Lost #{tid}", (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
                 
-                # Draw active tracks
-                for track in active_tracks.values():
-                    bbox = track.latest_bbox
-                    if not bbox:
-                        continue
-                        
-                    x1, y1, x2, y2 = bbox
-                    x1, x2 = int(x1 * scale_x), int(x2 * scale_x)
-                    y1, y2 = int(y1 * scale_y), int(y2 * scale_y)
-                    
-                    # Get confidence from latest point
-                    conf = track.points[-1].confidence if track.points else 0.0
-                    
-                    if track.class_type == "animal":
-                        color = (255, 165, 0) # Orange/Blueish in BGR for animal
-                        label = f"Animal {track.track_id} ({conf:.0%})"
-                        box_thickness = 3
-                        posture_label = ""
-                    else:
-                        # Human tracking
-                        track_score_obj = pipeline.latest_track_scores.get(track.track_id)
-                        track_score = track_score_obj.total_score if track_score_obj else 0.0
-                        triggered_rules = track_score_obj.rule_reasons if track_score_obj else []
-                        
-                        # Determine posture state from bbox
-                        bx1, by1, bx2, by2 = bbox
-                        bw = max(bx2 - bx1, 1)
-                        bh = max(by2 - by1, 1)
-                        aspect = bh / bw
-                        
-                        # Estimate speed from recent centroids
-                        speed = 0.0
-                        if len(track.points) >= 2:
-                            p1 = track.points[-2]
-                            p2 = track.points[-1]
-                            dt = p2.timestamp - p1.timestamp
-                            if dt > 0:
-                                dx = p2.centroid[0] - p1.centroid[0]
-                                dy = p2.centroid[1] - p1.centroid[1]
-                                speed = (dx*dx + dy*dy) ** 0.5 / dt
-                        
-                        if speed >= 25.0:
-                            posture_state = "Berjalan"
-                            posture_color = (255, 200, 0)  # cyan-ish
-                        elif aspect < 1.3 and bh < bw * 1.2:
-                            posture_state = "Duduk"
-                            posture_color = (0, 200, 255)  # orange/yellow
-                        else:
-                            posture_state = "Berdiri Diam"
-                            posture_color = (0, 255, 0)    # green
-                        
-                        # Color based on score level
-                        if track_score > pipeline.event_manager.suspicious_threshold:
-                            color = (0, 0, 255)    # Red for suspicious
-                            box_thickness = 4
-                        elif track_score > 30:
-                            color = (0, 165, 255)  # Orange for moderate
-                            box_thickness = 3
-                        elif track_score > 0:
-                            color = (0, 255, 255)  # Yellow for low activity
-                            box_thickness = 3
-                        else:
-                            color = (0, 255, 0)    # Green for normal
-                            box_thickness = 3
-                        
-                        # Main label: always show score
-                        label = f"#{track.track_id} {posture_state} | Skor: {track_score:.0f}/100"
-                        
-                        posture_label = posture_state
-                    
-                    # Draw thick box
-                    cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, box_thickness)
-                    
-                    # Draw label with score (top of box)
-                    (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
-                    cv2.rectangle(display_frame, (x1, y1 - 26), (x1 + w + 6, y1), color, -1)
-                    cv2.putText(display_frame, label, (x1 + 3, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-                    
-                    # Draw triggered rules below the bounding box (for humans only)
-                    if track.class_type == "human":
-                        y_offset = y2 + 2
-                        # Posture badge
-                        posture_text = f"[{posture_label}]"
-                        (pw, ph), _ = cv2.getTextSize(posture_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                        cv2.rectangle(display_frame, (x1, y_offset), (x1 + pw + 6, y_offset + 22), posture_color, -1)
-                        cv2.putText(display_frame, posture_text, (x1 + 3, y_offset + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
-                        y_offset += 24
-                        
-                        # Show triggered rule reasons (max 2 lines)
-                        if triggered_rules:
-                            for reason in triggered_rules[:2]:
-                                rule_text = f"! {reason}"
-                                (rw, rh), _ = cv2.getTextSize(rule_text, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
-                                cv2.rectangle(display_frame, (x1, y_offset), (x1 + rw + 4, y_offset + 18), (0, 0, 180), -1)
-                                cv2.putText(display_frame, rule_text, (x1 + 2, y_offset + 13), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-                                y_offset += 20
 
-                # Draw person count HUD overlay (top-left)
-                hud_text = f"Persons: {person_count} | Animals: {animal_count}"
-                cv2.rectangle(display_frame, (5, 5), (280, 35), (0, 0, 0), -1)
-                cv2.putText(display_frame, hud_text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0) if person_count == 0 else (0, 0, 255), 2)
+                veh_detections = getattr(pipeline, "latest_vehicle_detections", None)
+                riders = getattr(pipeline, "latest_riders", None)
+                vehicle_count = len(veh_detections) if veh_detections is not None else 0
 
-                # Encode frame to JPEG
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 85]
+                display_frame = Visualizer.draw_annotated_frame(
+                    frame=display_frame,
+                    active_tracks=active_tracks,
+                    track_scores=pipeline.latest_track_scores,
+                    suspicious_threshold=pipeline.event_manager.suspicious_threshold,
+                    person_count=person_count,
+                    animal_count=animal_count,
+                    all_detections=pipeline.latest_detections if hasattr(pipeline, "latest_detections") else None,
+                    scale_x=scale_x,
+                    scale_y=scale_y,
+                    vehicle_detections=veh_detections,
+                    riders=riders,
+                    vehicle_count=vehicle_count,
+                )
+
+                # Encode frame to JPEG (75% quality for ultra-low latency & bandwidth savings)
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 75]
                 _, buffer = cv2.imencode('.jpg', display_frame, encode_param)
                 frame_bytes = buffer.tobytes()
 
@@ -289,7 +223,9 @@ async def get_status(app: CCTVApplication = Depends(get_app)):
             state=state_info["state"],
             fps=stats["actual_fps"],
             active_tracks=stats["active_tracks"],
-            is_connected=stats["grabber"]["connected"]
+            is_connected=stats["grabber"]["connected"],
+            active_vehicles=stats.get("active_vehicles", 0),
+            active_riders=stats.get("active_riders", 0),
         ))
 
     return status_list
@@ -384,6 +320,134 @@ async def get_cameras(app: CCTVApplication = Depends(get_app)):
     except Exception as e:
         logger.error("Failed to read config: %s", e)
         return {"cameras": [], "error": str(e)}
+
+
+@router.post("/cameras/probe", response_model=StreamProbeResponse)
+async def probe_camera_stream(req: StreamProbeRequest):
+    """Probe a stream URL to check if it's reachable and active before adding."""
+    source_str = req.stream_url.strip()
+    if not source_str:
+        return StreamProbeResponse(
+            online=False,
+            source_type="UNKNOWN",
+            resolution="N/A",
+            fps=0.0,
+            message="URL stream tidak boleh kosong.",
+        )
+
+    # 1. Check if it's a USB webcam index
+    if source_str.isdigit():
+        idx = int(source_str)
+        try:
+            cap = cv2.VideoCapture(idx)
+            is_open = cap.isOpened()
+            cap.release()
+            if is_open:
+                return StreamProbeResponse(
+                    online=True,
+                    source_type="WEBCAM",
+                    resolution="Device OK",
+                    fps=30.0,
+                    message=f"Webcam USB ID {idx} terdeteksi dan siap digunakan.",
+                )
+            else:
+                return StreamProbeResponse(
+                    online=False,
+                    source_type="WEBCAM",
+                    resolution="N/A",
+                    fps=0.0,
+                    message=f"Webcam USB ID {idx} tidak dapat dibuka (device sibuk atau tidak terpasang).",
+                )
+        except Exception as e:
+            return StreamProbeResponse(
+                online=False,
+                source_type="WEBCAM",
+                resolution="N/A",
+                fps=0.0,
+                message=f"Error mendeteksi webcam: {e}",
+            )
+
+    # 2. Pre-check HTTP / HTTPS streams (e.g. HLS .m3u8) for 404 / connection errors
+    if source_str.startswith("http://") or source_str.startswith("https://"):
+        import urllib.request
+        import urllib.error
+        import ssl
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            http_req = urllib.request.Request(
+                source_str,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            with urllib.request.urlopen(http_req, context=ctx, timeout=3.0) as resp:
+                if resp.status != 200:
+                    return StreamProbeResponse(
+                        online=False,
+                        source_type="HLS",
+                        resolution="N/A",
+                        fps=0.0,
+                        message=f"Server penyedia merespons HTTP {resp.status} (Stream offline).",
+                    )
+        except urllib.error.HTTPError as e:
+            return StreamProbeResponse(
+                online=False,
+                source_type="HLS",
+                resolution="N/A",
+                fps=0.0,
+                message=f"Server penyedia merespons HTTP {e.code}: {e.reason} (Kamera offline di server asal / URL salah).",
+            )
+        except Exception as e:
+            return StreamProbeResponse(
+                online=False,
+                source_type="HLS",
+                resolution="N/A",
+                fps=0.0,
+                message=f"Gagal menghubungkan ke server stream: {e}",
+            )
+
+    # 3. Test OpenCV opening
+    try:
+        def _test_cap():
+            cap = cv2.VideoCapture(source_str, cv2.CAP_FFMPEG)
+            if not cap.isOpened():
+                return False, 0, 0, 0
+            w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            f = cap.get(cv2.CAP_PROP_FPS)
+            cap.release()
+            return True, int(w), int(h), float(f)
+
+        loop = asyncio.get_event_loop()
+        opened, w, h, fps = await loop.run_in_executor(None, _test_cap)
+
+        if opened:
+            stype = "RTSP" if source_str.startswith("rtsp://") else ("HLS" if ".m3u8" in source_str else "STREAM")
+            res_str = f"{w}x{h}" if w > 0 and h > 0 else "Online"
+            return StreamProbeResponse(
+                online=True,
+                source_type=stype,
+                resolution=res_str,
+                fps=fps if fps > 0 else 25.0,
+                message=f"Stream aktif dan terhubung ({res_str} @ {fps:.1f} FPS)",
+            )
+        else:
+            return StreamProbeResponse(
+                online=False,
+                source_type="STREAM",
+                resolution="N/A",
+                fps=0.0,
+                message="Kamera tidak dapat dihubungkan (Periksa IP/URL dan jaringan).",
+            )
+    except Exception as e:
+        return StreamProbeResponse(
+            online=False,
+            source_type="STREAM",
+            resolution="N/A",
+            fps=0.0,
+            message=f"Error pengujian stream: {e}",
+        )
 
 
 @router.post("/cameras")
@@ -688,13 +752,14 @@ async def get_system_health(app: CCTVApplication = Depends(get_app)):
     }
 
     # GPU Stats
-    try:
-        gpus = GPUtil.getGPUs()
-        if gpus:
-            health["gpu"]["percent"] = round(gpus[0].load * 100, 1)
-            health["gpu"]["name"] = gpus[0].name
-    except Exception as e:
-        logger.debug("Failed to get GPU stats: %s", e)
+    if GPUtil is not None:
+        try:
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                health["gpu"]["percent"] = round(gpus[0].load * 100, 1)
+                health["gpu"]["name"] = gpus[0].name
+        except Exception as e:
+            logger.debug("Failed to get GPU stats: %s", e)
 
     # Storage Stats
     if app.storage_manager:
@@ -754,3 +819,21 @@ async def get_recording(event_id: str, app: CCTVApplication = Depends(get_app)):
         )
         
     raise HTTPException(status_code=404, detail=f"Recording for event {event_id} not found")
+
+
+@router.post("/system/shutdown")
+async def system_shutdown(app: CCTVApplication = Depends(get_app)):
+    """Gracefully trigger system shutdown from the API."""
+    logger.info("Received system shutdown request via API")
+
+    async def _do_shutdown():
+        await asyncio.sleep(0.5)
+        if hasattr(app, "shutdown_event") and app.shutdown_event is not None:
+            app.shutdown_event.set()
+
+    asyncio.create_task(_do_shutdown())
+    return {
+        "status": "ok",
+        "message": "CCTV AI system is shutting down gracefully."
+    }
+

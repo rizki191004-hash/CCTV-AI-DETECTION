@@ -246,6 +246,10 @@ class RuleEngine:
                             triggered = True
                             break
 
+            elif cond.type == "fall_detected":
+                # Fall / person down detection: rapid fall velocity or horizontal torso
+                triggered = bool(features.is_fall_detected or features.posture_state == "FALLEN_HORIZONTAL")
+
             elif cond.type == "posture_state":
                 # Posture detection: berdiri_diam, duduk, berjalan
                 target_state = params.get("state", "")

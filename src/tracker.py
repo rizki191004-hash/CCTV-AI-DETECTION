@@ -163,7 +163,14 @@ class PersonTracker:
                 cy = (bbox[1] + bbox[3]) / 2
                 conf = float(tracked.confidence[i]) if tracked.confidence is not None else 0.0
                 class_id = int(tracked.class_id[i]) if tracked.class_id is not None else 0
-                class_type = "human" if class_id == 0 else "animal"
+                if class_id == 0:
+                    class_type = "human"
+                elif class_id in {14, 15, 16}:  # bird, cat, dog
+                    class_type = "animal"
+                elif class_id in {2, 3}:       # car, motorcycle
+                    class_type = "vehicle"
+                else:
+                    class_type = "object"
                 
                 # Match keypoints (find closest bbox in original detections)
                 kp = None
