@@ -29,22 +29,29 @@ LANGKAH INSTALASI OTOMATIS & RUN (WINDOWS):
    A. JIKA BELUM TERINSTALL DI PERANGKAT INI:
       - Layar akan menampilkan: [STATUS: SISTEM BELUM TERINSTALL]
       - Pilih mode instalasi:
-          [1] Install Lengkap (Rekomendasi: AI deps + .env + shortcut)
-          [2] Install Cepat   (Hanya library AI, skip konfigurasi)
+          [1] Install Lengkap (Rekomendasi: AI deps + .env + shortcut otomatis)
+          [2] Install Cepat   (Hanya library AI, skip konfigurasi/shortcut)
           [3] Keluar
       - Tekan Enter. Sistem akan otomatis mendownload semua library AI
         (OpenCV, PyTorch, YOLOv8, FastAPI). Progres download akan
         terlihat jelas di layar (estimasi 5-15 menit).
       - Jika memilih [1], masukkan Telegram Bot Token & Chat ID
         (opsional, bisa tekan Enter untuk isi nanti).
-      - Pilih 'y' jika ingin membuat shortcut "CCTV AI" di Desktop.
-      - Setelah selesai, tekan Enter: SISTEM AKAN LANGSUNG JALAN!
+      - Shortcut "CCTV AI" akan dibuat secara 100% OTOMATIS di Desktop
+        Anda (mendukung Desktop Lokal, OneDrive Desktop, dan Public).
+      - Setelah selesai, tekan Enter: SISTEM AKAN LANGSUNG BERJALAN!
 
    B. JIKA SUDAH PERNAH DIINSTALL SEBELUMNYA:
       - Layar akan menampilkan: [STATUS: SISTEM SUDAH TERINSTALL]
+      - Pilihan menu:
+          [1] Langsung Jalankan CCTV AI (Rekomendasi)
+          [2] Buat / Perbaiki Shortcut CCTV AI di Desktop
+          [3] Install Ulang / Perbarui Dependensi (Setup Ulang)
+          [4] Keluar
       - Cukup tekan [1] lalu Enter: CCTV AI langsung berjalan otomatis
         tanpa perlu download ulang!
-      - Ada juga opsi [2] jika ingin Install Ulang / Perbarui Dependensi.
+      - Jika shortcut di Desktop hilang/terhapus, pilih opsi [2] untuk
+        membuat ulang shortcut seketika dengan 1 klik.
 
 
 ================================================================
@@ -60,7 +67,7 @@ CARA MENJALANKAN APLIKASI SETELAH TERINSTALL:
 ================================================================
 Pilih salah satu cara termudah:
   1. Double-click file: setup.bat (otomatis deteksi & langsung jalan)
-  2. Double-click shortcut "CCTV AI" di Desktop (jika sudah dibuat)
+  2. Double-click shortcut "CCTV AI" di Desktop (1-click start/stop)
   3. Double-click file: run.py
   4. Mode Hening (tanpa jendela terminal): Double-click file cctv.pyw
 
@@ -93,6 +100,10 @@ TROUBLESHOOTING (SOLUSI MASALAH):
 Masalah: "Python tidak ditemukan di PATH"
 Solusi : Install ulang Python dari python.org dan pastikan centang
          "Add Python to PATH".
+
+Masalah: Shortcut Desktop tidak muncul
+Solusi : Double-click setup.bat, lalu pilih opsi [2] "Buat / Perbaiki
+         Shortcut CCTV AI di Desktop".
 
 Masalah: Jendela tertutup atau koneksi putus saat download dependensi
 Solusi : Koneksi internet terputus. Pastikan internet stabil, lalu
