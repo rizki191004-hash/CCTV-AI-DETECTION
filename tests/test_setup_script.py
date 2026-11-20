@@ -42,6 +42,13 @@ def test_setup_bat_handles_telegram_token():
     assert "TELEGRAM_BOT_TOKEN" in content, "setup.bat harus meminta Telegram Bot Token"
 
 
+def test_setup_bat_has_anti_close_pause():
+    """setup.bat harus memiliki pause agar CMD tidak langsung menutup."""
+    path = os.path.join(PROJECT_ROOT, "setup.bat")
+    content = open(path, encoding="utf-8").read()
+    assert "pause" in content.lower(), "setup.bat harus memiliki pause penahan jendela"
+
+
 def test_distribusi_md_exists():
     """DISTRIBUSI.md harus ada sebagai panduan apa yang dizip."""
     path = os.path.join(PROJECT_ROOT, "DISTRIBUSI.md")
@@ -67,10 +74,10 @@ def test_env_example_exists():
     assert os.path.isfile(path), ".env.example tidak ditemukan"
 
 
-def test_install_shortcut_bat_exists():
-    """install_shortcut.bat harus ada untuk instalasi shortcut Desktop."""
-    path = os.path.join(PROJECT_ROOT, "install_shortcut.bat")
-    assert os.path.isfile(path), "install_shortcut.bat tidak ditemukan"
+def test_launch_py_exists():
+    """launch.py harus ada sebagai launcher cross-platform."""
+    path = os.path.join(PROJECT_ROOT, "launch.py")
+    assert os.path.isfile(path), "launch.py tidak ditemukan"
 
 
 def test_model_files_exist():
@@ -78,4 +85,3 @@ def test_model_files_exist():
     for model in ["yolov8n.pt", "yolov8n-pose.pt"]:
         path = os.path.join(PROJECT_ROOT, model)
         assert os.path.isfile(path), f"Model {model} tidak ditemukan — wajib ikut dalam distribusi zip"
-

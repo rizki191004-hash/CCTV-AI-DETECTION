@@ -2,248 +2,254 @@
 setlocal enabledelayedexpansion
 
 :: ================================================================
-:: setup.bat --- CCTV AI Detection: Smart Setup + Launcher
+:: setup.bat --- CCTV AI Detection: Smart Setup & Launcher
 :: Windows launcher: setup otomatis jika belum, lalu langsung run.
-:: Untuk Linux/Mac gunakan: bash setup.sh
 :: ================================================================
 
+title CCTV AI Detection - Launcher
+cd /d "%~dp0"
+
+:CEK_STATUS
 cls
 echo.
 echo  +========================================================+
-echo  ^|       CCTV AI Detection --- Smart Launcher            ^|
-echo  ^|   Setup otomatis + jalankan sistem sekaligus          ^|
+echo  ^|       CCTV AI Detection --- Smart Setup ^& Launcher     ^|
 echo  +========================================================+
 echo.
 
-:: --- Cek apakah setup sudah pernah dilakukan ---
 if exist "%~dp0.setup_done" (
-    echo  [OK] Setup sudah selesai sebelumnya. Langsung menjalankan sistem...
+    echo  [PEMBERITAHUAN STATUS]
+    echo  --------------------------------------------------------
+    echo  STATUS: SISTEM SUDAH TERINSTALL SEBELUMNYA.
+    echo  Semua dependensi dan konfigurasi sudah siap digunakan.
+    echo  --------------------------------------------------------
     echo.
-    goto RUN
-)
-
-:: --- Belum pernah setup: tanya mode instalasi ---
-echo  Ini adalah instalasi pertama. Pilih mode:
-echo.
-echo    [1]  Install Lengkap  (deps + konfigurasi Telegram + shortcut Desktop)
-echo    [2]  Install Minimal  (deps saja, konfigurasi dan shortcut dilewati)
-echo.
-:PILIH_MODE
-set /p INSTALL_MODE="  Masukkan pilihan (1/2) lalu tekan Enter: "
-if "!INSTALL_MODE!"=="1" goto MULAI
-if "!INSTALL_MODE!"=="2" goto MULAI
-echo  [!] Pilihan tidak valid. Ketik 1 atau 2.
-goto PILIH_MODE
-
-:MULAI
-echo.
-if "!INSTALL_MODE!"=="1" (
-    echo  Mode: Install Lengkap dipilih.
+    echo  Pilih opsi:
+    echo    [1] Langsung Jalankan CCTV AI (Rekomendasi)
+    echo    [2] Install Ulang / Perbarui Dependensi (Setup Ulang)
+    echo    [3] Keluar
+    echo.
+    set /p PILIHAN_SUDAH="  Masukkan pilihan (1/2/3) [Default 1]: "
+    if "!PILIHAN_SUDAH!"=="" set PILIHAN_SUDAH=1
+    if "!PILIHAN_SUDAH!"=="1" goto JALANKAN_SISTEM
+    if "!PILIHAN_SUDAH!"=="2" goto KONFIRMASI_SETUP_ULANG
+    if "!PILIHAN_SUDAH!"=="3" goto KELUAR
+    echo.
+    echo  [!] Pilihan tidak valid. Silakan ketik 1, 2, atau 3.
+    timeout /t 2 >nul
+    goto CEK_STATUS
 ) else (
-    echo  Mode: Install Minimal dipilih.
+    echo  [PEMBERITAHUAN STATUS]
+    echo  --------------------------------------------------------
+    echo  STATUS: SISTEM BELUM TERINSTALL DI PERANGKAT INI.
+    echo  Sistem akan memandu instalasi otomatis step-by-step.
+    echo  --------------------------------------------------------
+    echo.
+    echo  Pilih mode instalasi:
+    echo    [1] Install Lengkap (Dependensi + Konfigurasi .env + Shortcut)
+    echo    [2] Install Cepat   (Hanya Dependensi, skip konfigurasi/shortcut)
+    echo    [3] Keluar / Batalkan
+    echo.
+    set /p INSTALL_MODE="  Masukkan pilihan (1/2/3) [Default 1]: "
+    if "!INSTALL_MODE!"=="" set INSTALL_MODE=1
+    if "!INSTALL_MODE!"=="1" goto MULAI_SETUP
+    if "!INSTALL_MODE!"=="2" goto MULAI_SETUP
+    if "!INSTALL_MODE!"=="3" goto KELUAR
+    echo.
+    echo  [!] Pilihan tidak valid. Silakan ketik 1, 2, atau 3.
+    timeout /t 2 >nul
+    goto CEK_STATUS
+)
+
+:KONFIRMASI_SETUP_ULANG
+echo.
+echo  --------------------------------------------------------
+echo  [KONFIRMASI] Anda memilih Setup Ulang / Perbarui.
+echo  --------------------------------------------------------
+del /f /q "%~dp0.setup_done" >nul 2>&1
+echo  Penanda instalasi lama telah dibersihkan.
+echo  Memulai proses instalasi baru...
+timeout /t 2 >nul
+goto CEK_STATUS
+
+:MULAI_SETUP
+echo.
+echo  ========================================================
+echo  [INFO] MEMULAI PROSES INSTALASI OTOMATIS
+echo  ========================================================
+if "!INSTALL_MODE!"=="1" (
+    echo  Mode Terpilih: [1] Install Lengkap
+) else (
+    echo  Mode Terpilih: [2] Install Cepat (Minimal)
 )
 echo.
-echo  Proses berjalan step by step. Tekan Enter di setiap langkah.
-echo  Tekan Ctrl+C kapan saja untuk membatalkan.
-echo.
-pause
+echo  Tekan tombol apa saja untuk memulai instalasi...
+pause >nul
 
-:: ================================================================
-:: LANGKAH 1 -- Cek Python
-:: ================================================================
-cls
+:: --- LANGKAH 1: Cek Python ---
 echo.
-echo  +========================================================+
-echo  ^|  Langkah 1 / 5 : Memeriksa instalasi Python           ^|
-echo  +========================================================+
-echo.
-echo  Memastikan Python 3.11+ sudah terinstall dan ada di PATH.
-echo.
-pause
-echo.
-python --version >nul 2>&1
+echo  --------------------------------------------------------
+echo  [Langkah 1/5] Memeriksa Instalasi Python...
+echo  --------------------------------------------------------
+python --version 2>nul
 if %ERRORLEVEL% NEQ 0 (
-    echo  [ERROR] Python tidak ditemukan!
     echo.
-    echo  Silakan install Python 3.11 atau lebih baru dari:
+    echo  [ERROR] Python tidak ditemukan di PATH sistem Anda!
+    echo.
+    echo  Silakan download dan install Python 3.11+ dari:
     echo  https://www.python.org/downloads/
     echo.
-    echo  PENTING: Centang "Add Python to PATH" saat instalasi!
-    echo.
-    pause
-    exit /b 1
+    echo  PENTING: Centang kotak "Add Python to PATH" saat instalasi.
+    goto GAGAL
 )
-for /f "tokens=2" %%v in ('python --version 2^>&1') do set PYVER=%%v
-echo  [OK] Python !PYVER! ditemukan.
-echo.
-pause
+python -c "import sys; print(f'Versi Python terdeteksi: {sys.version.split()[0]}')"
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo  [PERINGATAN] Versi Python di bawah 3.10. Disarankan Python 3.11 atau lebih baru.
+) else (
+    echo  [OK] Versi Python memenuhi syarat.
+)
 
-:: ================================================================
-:: LANGKAH 2 -- Upgrade pip
-:: ================================================================
-cls
+:: --- LANGKAH 2: Update pip ---
 echo.
-echo  +========================================================+
-echo  ^|  Langkah 2 / 5 : Memperbarui pip                      ^|
-echo  +========================================================+
-echo.
-echo  Memperbarui pip ke versi terbaru.
-echo.
-pause
-echo.
-python -m pip install --upgrade pip --quiet
-echo  [OK] pip berhasil diperbarui.
-echo.
-pause
+echo  --------------------------------------------------------
+echo  [Langkah 2/5] Memeriksa & Memperbarui pip...
+echo  --------------------------------------------------------
+python -m pip install --upgrade pip
+if %ERRORLEVEL% NEQ 0 (
+    echo  [PERINGATAN] Pembaruan pip gagal atau dibatasi. Melanjutkan dengan pip yang ada.
+) else (
+    echo  [OK] pip siap digunakan.
+)
 
-:: ================================================================
-:: LANGKAH 3 -- Install dependensi
-:: ================================================================
-cls
+:: --- LANGKAH 3: Install Dependensi ---
 echo.
-echo  +========================================================+
-echo  ^|  Langkah 3 / 5 : Menginstall dependensi               ^|
-echo  +========================================================+
-echo.
-echo  Menginstall semua library dari requirements.txt.
-echo  Waktu: 5-15 menit tergantung kecepatan internet.
-echo.
-pause
+echo  --------------------------------------------------------
+echo  [Langkah 3/5] Menginstall Dependensi (requirements.txt)...
+echo  --------------------------------------------------------
+echo  Mengunduh dan memasang library AI (OpenCV, YOLO, PyTorch, FastAPI, dll).
+echo  Proses ini memerlukan koneksi internet aktif.
+echo  Harap jangan menutup jendela ini hingga instalasi selesai...
 echo.
 python -m pip install -r "%~dp0requirements.txt"
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo  [ERROR] Gagal menginstall dependensi!
-    echo  Pastikan koneksi internet aktif, lalu coba lagi.
-    echo.
-    pause
-    exit /b 1
+    echo  [ERROR] Instalasi dependensi requirements.txt gagal!
+    echo  Pastikan koneksi internet terhubung dan coba ulangi kembali.
+    goto GAGAL
 )
 echo.
-echo  [OK] Semua dependensi berhasil diinstall.
-echo.
-pause
+echo  [OK] Seluruh dependensi berhasil diinstall!
 
-:: ================================================================
-:: LANGKAH 4 -- Konfigurasi .env  (hanya mode Lengkap)
-:: ================================================================
-cls
+:: --- LANGKAH 4: Konfigurasi .env ---
 echo.
-echo  +========================================================+
-echo  ^|  Langkah 4 / 5 : Konfigurasi aplikasi (.env)          ^|
-echo  +========================================================+
-echo.
-
+echo  --------------------------------------------------------
+echo  [Langkah 4/5] Konfigurasi Pengaturan (.env)...
+echo  --------------------------------------------------------
 if "!INSTALL_MODE!"=="2" (
-    echo  [--] Mode Minimal -- langkah ini dilewati.
-    echo  Edit file .env secara manual untuk mengatur Telegram, dll.
-    echo.
-    pause
-    goto LANGKAH5
+    echo  [INFO] Mode Cepat aktif: Konfigurasi dilewati.
+    goto LANGKAH_SHORTCUT
 )
 
 if exist "%~dp0.env" (
-    echo  File .env sudah ada -- konfigurasi dilewati.
-    echo.
-    pause
-    goto LANGKAH5
+    echo  [OK] File .env sudah ada (konfigurasi yang ada dipertahankan).
+    goto LANGKAH_SHORTCUT
 )
 
-echo  File .env belum ada. Isi konfigurasi dasar:
-echo  (Tekan Enter tanpa mengetik apa pun untuk melewati tiap field)
+echo  Mengatur konfigurasi awal Telegram Notifier:
+echo  (Tekan Enter jika ingin melewati dan mengisi nanti di file .env)
 echo.
-pause
-echo.
-
-echo  +-- TELEGRAM BOT TOKEN ------------------------------------+
-echo  ^| Dapatkan token dari @BotFather di Telegram.            ^|
-echo  ^| Contoh: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ          ^|
-echo  +----------------------------------------------------------+
-set /p BOT_TOKEN="  Masukkan Telegram Bot Token: "
-echo.
-
-echo  +-- TELEGRAM CHAT ID --------------------------------------+
-echo  ^| Dapatkan Chat ID dari @userinfobot di Telegram.        ^|
-echo  ^| Contoh: -123456789 (grup) atau 123456789 (pribadi)     ^|
-echo  +----------------------------------------------------------+
-set /p CHAT_ID="  Masukkan Telegram Chat ID: "
-echo.
+set /p BOT_TOKEN="  1. Masukkan Telegram Bot Token (opsional): "
+set /p CHAT_ID="  2. Masukkan Telegram Chat ID   (opsional): "
 
 set ENVFILE=%~dp0.env
-echo # CCTV AI Detection --- Konfigurasi dibuat oleh setup.bat> "!ENVFILE!"
+echo # CCTV AI Detection --- Konfigurasi otomatis> "!ENVFILE!"
 echo TELEGRAM_BOT_TOKEN=!BOT_TOKEN!>> "!ENVFILE!"
 echo TELEGRAM_CHAT_ID=!CHAT_ID!>> "!ENVFILE!"
 echo.>> "!ENVFILE!"
-echo # Cloudflare Tunnel (kosongkan = pakai Quick Tunnel gratis)>> "!ENVFILE!"
+echo # Cloudflare Quick Tunnel (kosongkan = otomatis gratis)>> "!ENVFILE!"
 echo # CLOUDFLARE_TUNNEL_TOKEN=>> "!ENVFILE!"
 echo.>> "!ENVFILE!"
-echo # PIN Dashboard (kosongkan = tanpa PIN)>> "!ENVFILE!"
+echo # PIN Dashboard Mobile (kosongkan = tanpa PIN)>> "!ENVFILE!"
 echo # DASHBOARD_PIN=>> "!ENVFILE!"
 
-echo  [OK] File .env berhasil dibuat.
 echo.
-pause
+echo  [OK] File konfigurasi .env berhasil dibuat!
 
-:: ================================================================
-:: LANGKAH 5 -- Shortcut Desktop  (hanya mode Lengkap)
-:: ================================================================
-:LANGKAH5
-cls
+:: --- LANGKAH 5: Shortcut Desktop ---
+:LANGKAH_SHORTCUT
 echo.
-echo  +========================================================+
-echo  ^|  Langkah 5 / 5 : Shortcut Desktop (opsional)          ^|
-echo  +========================================================+
-echo.
-
+echo  --------------------------------------------------------
+echo  [Langkah 5/5] Membuat Shortcut Desktop (Opsional)...
+echo  --------------------------------------------------------
 if "!INSTALL_MODE!"=="2" (
-    echo  [--] Mode Minimal -- langkah ini dilewati.
-    echo.
-    pause
-    goto TANDAI_SELESAI
+    echo  [INFO] Mode Cepat aktif: Pembuatan shortcut dilewati.
+    goto SELESAI_SETUP
 )
 
-set /p BUAT_SHORTCUT="  Buat shortcut 'CCTV AI' di Desktop? (y/n): "
-if /i "!BUAT_SHORTCUT!"=="y" (
-    echo.
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
-    if %ERRORLEVEL% EQU 0 (
-        echo  [OK] Shortcut berhasil dibuat di Desktop.
+set /p BUAT_SC="  Buat shortcut 'CCTV AI' di Desktop? (y/n) [Default y]: "
+if "!BUAT_SC!"=="" set BUAT_SC=y
+if /i "!BUAT_SC!"=="y" (
+    if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
+        if %ERRORLEVEL% EQU 0 (
+            echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda.
+        ) else (
+            echo  [INFO] Pembuatan shortcut dilewati / tidak dapat dijalankan.
+        )
     ) else (
-        echo  [PERINGATAN] Gagal membuat shortcut. Tidak masalah, bisa dilewati.
+        echo  [INFO] Script shortcut tidak ditemukan, dilewati.
     )
 ) else (
-    echo  Dilewati.
+    echo  [INFO] Pembuatan shortcut dilewati oleh pengguna.
 )
-echo.
-pause
 
-:: ================================================================
-:: Tandai setup selesai (sentinel file)
-:: ================================================================
-:TANDAI_SELESAI
+:: --- SELESAI SETUP ---
+:SELESAI_SETUP
 echo setup_done > "%~dp0.setup_done"
+echo.
+echo  ========================================================
+echo  [STATUS] INSTALASI OTOMATIS BERHASIL!
+echo  ========================================================
+echo  Sistem CCTV AI Detection telah terkonfigurasi lengkap.
+echo.
+echo  Tekan tombol apa saja untuk langsung menjalankan CCTV AI...
+pause >nul
+goto JALANKAN_SISTEM
 
+:: --- RUN PROGRAM ---
+:JALANKAN_SISTEM
 cls
 echo.
 echo  +========================================================+
-echo  ^|   Setup Selesai! Menjalankan sistem sekarang...       ^|
+echo  ^|       CCTV AI Detection --- Menjalankan Sistem         ^|
 echo  +========================================================+
 echo.
-pause
-
-:: ================================================================
-:: RUN -- Jalankan program
-:: ================================================================
-:RUN
-cls
+echo  [PEMBERITAHUAN SISTEM]
+echo  - Live Dashboard Lokal : http://localhost:8000
+echo  - Cloudflare Tunnel    : Dikelola otomatis ^(cek log/Telegram^)
+echo  - Cara Menghentikan    : Tekan Ctrl+C pada jendela ini
 echo.
-echo  +========================================================+
-echo  ^|       CCTV AI Detection --- Sistem Berjalan           ^|
-echo  ^|   Dashboard: http://localhost:8000                     ^|
-echo  ^|   Tekan Ctrl+C untuk menghentikan                     ^|
-echo  +========================================================+
+echo  Memulai sistem CCTV AI...
 echo.
 python "%~dp0run.py"
 echo.
-echo  [INFO] Sistem dihentikan.
-pause
+echo  ========================================================
+echo  [INFO] Sistem CCTV AI Detection telah dihentikan.
+echo  ========================================================
+goto KELUAR
+
+:GAGAL
+echo.
+echo  ========================================================
+echo  [ERROR] Terjadi kesalahan dalam proses instalasi!
+echo  Jendela ini TIDAK akan tertutup otomatis.
+echo  Silakan periksa pesan error di atas.
+echo  ========================================================
+goto KELUAR
+
+:KELUAR
+echo.
+echo  Tekan tombol apa saja untuk menutup jendela ini...
+pause >nul
+exit /b 0
