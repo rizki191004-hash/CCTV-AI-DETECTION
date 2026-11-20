@@ -16,16 +16,17 @@ __pycache__/
 *.pyc
 *.pyd
 *.egg-info/
-dist/
+/dist/
 build/
 .venv/
 venv/
 *.egg
 
-# Dashboard build — generate ulang dengan npm run build
+# Dashboard build — node_modules diabaikan, tapi dist wajib masuk git agar pengguna tidak butuh npm
 dashboard/node_modules/
-dashboard/dist/
 node_modules/
+!dashboard/dist/
+!dashboard/dist/**
 
 # OpenH264 test file
 test.mp4

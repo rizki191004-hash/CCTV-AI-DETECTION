@@ -9,7 +9,8 @@ Jalankan file ini di platform mana saja:
 
 Perilaku:
   - Jika setup BELUM dilakukan (.setup_done tidak ada):
-      Tampilkan status BELUM TERINSTALL, jalankan setup otomatis (shortcut dibuat otomatis), lalu langsung run.
+      Tampilkan status BELUM TERINSTALL, jalankan setup otomatis,
+      tampilkan pilihan [1] Jalankan Sekarang / [2] Keluar.
   - Jika setup SUDAH dilakukan:
       Tampilkan status SUDAH TERINSTALL, berikan opsi langsung jalankan, buat ulang shortcut, atau setup ulang.
 """
@@ -114,6 +115,13 @@ def step_install_deps():
         sys.exit(1)
     print("\n  [OK] Semua dependensi berhasil diinstall!")
 
+    # Check dashboard dist
+    dist_index = os.path.join(PROJECT_ROOT, "dashboard", "dist", "index.html")
+    if os.path.exists(dist_index):
+        print("  [OK] Komponen tampilan Dashboard Web ditemukan.")
+    else:
+        print("  [PERINGATAN] Folder dashboard/dist belum ditemukan!")
+
 
 def step_config_env():
     print()
@@ -154,7 +162,7 @@ def create_shortcut():
                 text=True
             )
             if r.returncode == 0:
-                print("  [OK] Shortcut CCTV AI berhasil dibuat di Desktop Anda!")
+                print("  [OK] Shortcut tunggal CCTV AI berhasil dibuat di Desktop Anda!")
             else:
                 print("  [INFO] Pembuatan shortcut otomatis dilewati / tidak didukung.")
         else:
@@ -181,11 +189,21 @@ def do_setup(mode: str):
     # Tandai setup selesai
     with open(SENTINEL, "w") as f:
         f.write("setup_done\n")
+
     print("\n  ========================================================")
     print("  [STATUS] INSTALASI OTOMATIS BERHASIL!")
     print("  ========================================================")
-    print("  Sistem CCTV AI Detection siap dijalankan.")
-    pause("\n  Tekan Enter untuk langsung menjalankan sistem...")
+    print("  Pilih langkah selanjutnya:")
+    print("    [1] Langsung Jalankan CCTV AI Sekarang (Buka Dashboard)")
+    print("    [2] Selesai & Keluar (Jalankan nanti via Shortcut Desktop)")
+    print()
+    pilih = input("  Masukkan pilihan (1/2) [Default 1]: ").strip()
+    if pilih == "2":
+        print("\n  [INFO] Selesai. Anda dapat menjalankan CCTV AI kapan saja via Desktop.")
+        pause("\n  Tekan Enter untuk menutup...")
+        sys.exit(0)
+
+    run_program()
 
 
 def main():
@@ -248,7 +266,6 @@ def main():
         print("  [!] Pilihan tidak valid.")
 
     do_setup(mode)
-    run_program()
 
 
 if __name__ == "__main__":

@@ -66,12 +66,12 @@ if exist "%~dp0.setup_done" (
 :BUAT_SHORTCUT_SAJA
 echo.
 echo  --------------------------------------------------------
-echo  Membuat shortcut 'CCTV AI' di Desktop...
+echo  Membuat shortcut tunggal 'CCTV AI' di Desktop...
 echo  --------------------------------------------------------
 if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
     if %ERRORLEVEL% EQU 0 (
-        echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda!
+        echo  [OK] Shortcut tunggal "CCTV AI" berhasil dibuat di Desktop Anda!
     ) else (
         echo  [PERINGATAN] Gagal membuat shortcut via PowerShell.
     )
@@ -161,7 +161,25 @@ if %ERRORLEVEL% NEQ 0 (
     goto GAGAL
 )
 echo.
-echo  [OK] Seluruh dependensi berhasil diinstall!
+echo  [OK] Seluruh dependensi Python berhasil diinstall!
+
+:: --- Pengecekan Dashboard Web ---
+if not exist "%~dp0dashboard\dist\index.html" (
+    echo.
+    echo  [PERINGATAN] File dashboard web belum ter-build di dashboard\dist!
+    where npm >nul 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        echo  Mencoba membangun komponen dashboard otomatis via npm...
+        pushd "%~dp0dashboard"
+        call npm run build
+        popd
+        if exist "%~dp0dashboard\dist\index.html" (
+            echo  [OK] Dashboard web berhasil dibangun!
+        )
+    )
+) else (
+    echo  [OK] Komponen tampilan Dashboard Web ditemukan dan siap digunakan.
+)
 
 :: --- LANGKAH 4: Konfigurasi .env ---
 echo.
@@ -198,7 +216,7 @@ echo # DASHBOARD_PIN=>> "!ENVFILE!"
 echo.
 echo  [OK] File konfigurasi .env berhasil dibuat!
 
-:: --- LANGKAH 5: Shortcut Desktop (Otomatis) ---
+:: --- LANGKAH 5: Shortcut Desktop (Otomatis & Tunggal) ---
 :LANGKAH_SHORTCUT
 echo.
 echo  --------------------------------------------------------
@@ -209,11 +227,11 @@ if "!INSTALL_MODE!"=="2" (
     goto SELESAI_SETUP
 )
 
-echo  Membuat shortcut 'CCTV AI' di Desktop...
+echo  Membuat shortcut tunggal 'CCTV AI' di Desktop...
 if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
     if %ERRORLEVEL% EQU 0 (
-        echo  [OK] Shortcut "CCTV AI" berhasil dibuat secara otomatis di Desktop Anda!
+        echo  [OK] Shortcut tunggal "CCTV AI" berhasil dibuat di Desktop Anda!
     ) else (
         echo  [INFO] Pembuatan shortcut otomatis dilewati / tidak didukung.
     )
@@ -221,19 +239,35 @@ if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
     echo  [INFO] Script shortcut tidak ditemukan, dilewati.
 )
 
-:: --- SELESAI SETUP ---
+:: --- SELESAI SETUP DENGAN OPSI KELUAR / JALANKAN ---
 :SELESAI_SETUP
 echo setup_done > "%~dp0.setup_done"
 echo.
 echo  ========================================================
 echo  [STATUS] INSTALASI OTOMATIS BERHASIL!
 echo  ========================================================
-echo  Sistem CCTV AI Detection telah terkonfigurasi lengkap.
-echo  Shortcut 'CCTV AI' telah siap di Desktop Anda.
+echo  Semua dependensi dan komponen telah siap digunakan.
+echo  Shortcut 'CCTV AI' telah dibuat di Desktop Anda.
 echo.
-echo  Tekan tombol apa saja untuk langsung menjalankan CCTV AI...
-pause >nul
-goto JALANKAN_SISTEM
+echo  Pilih langkah selanjutnya:
+echo    [1] Langsung Jalankan CCTV AI Sekarang (Buka Dashboard)
+echo    [2] Selesai ^& Keluar (Jalankan nanti via Shortcut Desktop)
+echo.
+:PILIH_SELESAI
+set /p PILIH_AKHIR="  Masukkan pilihan (1/2) [Default 1]: "
+if "!PILIH_AKHIR!"=="" set PILIH_AKHIR=1
+if "!PILIH_AKHIR!"=="1" goto JALANKAN_SISTEM
+if "!PILIH_AKHIR!"=="2" goto SELESAI_KELUAR
+echo  [!] Pilihan tidak valid. Ketik 1 atau 2.
+goto PILIH_SELESAI
+
+:SELESAI_KELUAR
+echo.
+echo  ========================================================
+echo  [INFO] Instalasi selesai. Anda dapat menjalankan CCTV AI
+echo  kapan saja melalui shortcut 'CCTV AI' di Desktop atau setup.bat.
+echo  ========================================================
+goto KELUAR
 
 :: --- RUN PROGRAM ---
 :JALANKAN_SISTEM
