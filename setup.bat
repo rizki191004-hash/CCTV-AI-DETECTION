@@ -26,16 +26,18 @@ if exist "%~dp0.setup_done" (
     echo.
     echo  Pilih opsi:
     echo    [1] Langsung Jalankan CCTV AI (Rekomendasi)
-    echo    [2] Install Ulang / Perbarui Dependensi (Setup Ulang)
-    echo    [3] Keluar
+    echo    [2] Buat / Perbaiki Shortcut CCTV AI di Desktop
+    echo    [3] Install Ulang / Perbarui Dependensi (Setup Ulang)
+    echo    [4] Keluar
     echo.
-    set /p PILIHAN_SUDAH="  Masukkan pilihan (1/2/3) [Default 1]: "
+    set /p PILIHAN_SUDAH="  Masukkan pilihan (1/2/3/4) [Default 1]: "
     if "!PILIHAN_SUDAH!"=="" set PILIHAN_SUDAH=1
     if "!PILIHAN_SUDAH!"=="1" goto JALANKAN_SISTEM
-    if "!PILIHAN_SUDAH!"=="2" goto KONFIRMASI_SETUP_ULANG
-    if "!PILIHAN_SUDAH!"=="3" goto KELUAR
+    if "!PILIHAN_SUDAH!"=="2" goto BUAT_SHORTCUT_SAJA
+    if "!PILIHAN_SUDAH!"=="3" goto KONFIRMASI_SETUP_ULANG
+    if "!PILIHAN_SUDAH!"=="4" goto KELUAR
     echo.
-    echo  [!] Pilihan tidak valid. Silakan ketik 1, 2, atau 3.
+    echo  [!] Pilihan tidak valid. Silakan ketik 1, 2, 3, atau 4.
     timeout /t 2 >nul
     goto CEK_STATUS
 ) else (
@@ -46,7 +48,7 @@ if exist "%~dp0.setup_done" (
     echo  --------------------------------------------------------
     echo.
     echo  Pilih mode instalasi:
-    echo    [1] Install Lengkap (Dependensi + Konfigurasi .env + Shortcut)
+    echo    [1] Install Lengkap (Dependensi + Konfigurasi .env + Shortcut Otomatis)
     echo    [2] Install Cepat   (Hanya Dependensi, skip konfigurasi/shortcut)
     echo    [3] Keluar / Batalkan
     echo.
@@ -60,6 +62,26 @@ if exist "%~dp0.setup_done" (
     timeout /t 2 >nul
     goto CEK_STATUS
 )
+
+:BUAT_SHORTCUT_SAJA
+echo.
+echo  --------------------------------------------------------
+echo  Membuat shortcut 'CCTV AI' di Desktop...
+echo  --------------------------------------------------------
+if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
+    if %ERRORLEVEL% EQU 0 (
+        echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda!
+    ) else (
+        echo  [PERINGATAN] Gagal membuat shortcut via PowerShell.
+    )
+) else (
+    echo  [ERROR] File scripts\create_desktop_shortcut.ps1 tidak ditemukan!
+)
+echo.
+echo  Tekan tombol apa saja untuk kembali ke menu...
+pause >nul
+goto CEK_STATUS
 
 :KONFIRMASI_SETUP_ULANG
 echo.
@@ -78,7 +100,7 @@ echo  ========================================================
 echo  [INFO] MEMULAI PROSES INSTALASI OTOMATIS
 echo  ========================================================
 if "!INSTALL_MODE!"=="1" (
-    echo  Mode Terpilih: [1] Install Lengkap
+    echo  Mode Terpilih: [1] Install Lengkap (Shortcut Dibuat Otomatis)
 ) else (
     echo  Mode Terpilih: [2] Install Cepat (Minimal)
 )
@@ -176,32 +198,27 @@ echo # DASHBOARD_PIN=>> "!ENVFILE!"
 echo.
 echo  [OK] File konfigurasi .env berhasil dibuat!
 
-:: --- LANGKAH 5: Shortcut Desktop ---
+:: --- LANGKAH 5: Shortcut Desktop (Otomatis) ---
 :LANGKAH_SHORTCUT
 echo.
 echo  --------------------------------------------------------
-echo  [Langkah 5/5] Membuat Shortcut Desktop (Opsional)...
+echo  [Langkah 5/5] Membuat Shortcut Desktop Otomatis...
 echo  --------------------------------------------------------
 if "!INSTALL_MODE!"=="2" (
     echo  [INFO] Mode Cepat aktif: Pembuatan shortcut dilewati.
     goto SELESAI_SETUP
 )
 
-set /p BUAT_SC="  Buat shortcut 'CCTV AI' di Desktop? (y/n) [Default y]: "
-if "!BUAT_SC!"=="" set BUAT_SC=y
-if /i "!BUAT_SC!"=="y" (
-    if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
-        if %ERRORLEVEL% EQU 0 (
-            echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda.
-        ) else (
-            echo  [INFO] Pembuatan shortcut dilewati / tidak dapat dijalankan.
-        )
+echo  Membuat shortcut 'CCTV AI' di Desktop...
+if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
+    if %ERRORLEVEL% EQU 0 (
+        echo  [OK] Shortcut "CCTV AI" berhasil dibuat secara otomatis di Desktop Anda!
     ) else (
-        echo  [INFO] Script shortcut tidak ditemukan, dilewati.
+        echo  [INFO] Pembuatan shortcut otomatis dilewati / tidak didukung.
     )
 ) else (
-    echo  [INFO] Pembuatan shortcut dilewati oleh pengguna.
+    echo  [INFO] Script shortcut tidak ditemukan, dilewati.
 )
 
 :: --- SELESAI SETUP ---
@@ -212,6 +229,7 @@ echo  ========================================================
 echo  [STATUS] INSTALASI OTOMATIS BERHASIL!
 echo  ========================================================
 echo  Sistem CCTV AI Detection telah terkonfigurasi lengkap.
+echo  Shortcut 'CCTV AI' telah siap di Desktop Anda.
 echo.
 echo  Tekan tombol apa saja untuk langsung menjalankan CCTV AI...
 pause >nul

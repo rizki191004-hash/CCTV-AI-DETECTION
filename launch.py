@@ -9,9 +9,9 @@ Jalankan file ini di platform mana saja:
 
 Perilaku:
   - Jika setup BELUM dilakukan (.setup_done tidak ada):
-      Tampilkan status BELUM TERINSTALL, jalankan setup otomatis, lalu langsung run.
+      Tampilkan status BELUM TERINSTALL, jalankan setup otomatis (shortcut dibuat otomatis), lalu langsung run.
   - Jika setup SUDAH dilakukan:
-      Tampilkan status SUDAH TERINSTALL, berikan opsi langsung jalankan atau setup ulang.
+      Tampilkan status SUDAH TERINSTALL, berikan opsi langsung jalankan, buat ulang shortcut, atau setup ulang.
 """
 
 import os
@@ -139,37 +139,33 @@ def step_config_env():
     print("\n  [OK] File konfigurasi .env berhasil dibuat!")
 
 
-def step_shortcut():
+def create_shortcut():
     print()
     print("  --------------------------------------------------------")
-    print("  [Langkah 5/5] Membuat Shortcut Desktop (Opsional)...")
+    print("  Membuat Shortcut Desktop Otomatis...")
     print("  --------------------------------------------------------")
     if IS_WINDOWS:
         ps1 = os.path.join(PROJECT_ROOT, "scripts", "create_desktop_shortcut.ps1")
-        ans = input("  Buat shortcut 'CCTV AI' di Desktop? (y/n) [Default y]: ").strip().lower()
-        if ans in ("", "y") and os.path.exists(ps1):
+        if os.path.exists(ps1):
             r = subprocess.run(
                 ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
                  "-File", ps1],
-                capture_output=True
+                capture_output=True,
+                text=True
             )
             if r.returncode == 0:
-                print("  [OK] Shortcut berhasil dibuat di Desktop Anda.")
+                print("  [OK] Shortcut CCTV AI berhasil dibuat di Desktop Anda!")
             else:
-                print("  [INFO] Gagal membuat shortcut otomatis. Dilewati.")
+                print("  [INFO] Pembuatan shortcut otomatis dilewati / tidak didukung.")
         else:
-            print("  [INFO] Pembuatan shortcut dilewati.")
+            print("  [INFO] Script shortcut tidak ditemukan.")
     else:
         link = "/usr/local/bin/cctv-ai"
-        ans = input(f"  Buat alias 'cctv-ai' di {link}? (y/n): ").strip().lower()
-        if ans == "y":
-            try:
-                subprocess.run(["sudo", "ln", "-sf", RUN_SCRIPT, link], check=True)
-                print("  [OK] Shortcut dibuat: ketik 'cctv-ai' dari terminal.")
-            except Exception:
-                print("  [INFO] Gagal (butuh sudo), dilewati.")
-        else:
-            print("  [INFO] Pembuatan shortcut dilewati.")
+        try:
+            subprocess.run(["sudo", "ln", "-sf", RUN_SCRIPT, link], check=True)
+            print("  [OK] Shortcut dibuat: ketik 'cctv-ai' dari terminal.")
+        except Exception:
+            print("  [INFO] Shortcut terminal dilewati.")
 
 
 def do_setup(mode: str):
@@ -181,7 +177,7 @@ def do_setup(mode: str):
     step_install_deps()
     if mode == "1":
         step_config_env()
-        step_shortcut()
+        create_shortcut()
     # Tandai setup selesai
     with open(SENTINEL, "w") as f:
         f.write("setup_done\n")
@@ -206,18 +202,24 @@ def main():
         print()
         print("  Pilih opsi:")
         print("    [1] Langsung Jalankan CCTV AI (Rekomendasi)")
-        print("    [2] Install Ulang / Perbarui Dependensi (Setup Ulang)")
-        print("    [3] Keluar")
+        print("    [2] Buat / Perbaiki Shortcut Desktop")
+        print("    [3] Install Ulang / Perbarui Dependensi (Setup Ulang)")
+        print("    [4] Keluar")
         print()
-        ans = input("  Masukkan pilihan (1/2/3) [Default 1]: ").strip()
+        ans = input("  Masukkan pilihan (1/2/3/4) [Default 1]: ").strip()
         if ans == "" or ans == "1":
             run_program()
             return
         elif ans == "2":
+            create_shortcut()
+            pause("\n  Tekan Enter untuk kembali ke menu...")
+            main()
+            return
+        elif ans == "3":
             if os.path.exists(SENTINEL):
                 os.remove(SENTINEL)
             print("\n  [INFO] Penanda setup dibersihkan. Memulai setup ulang...")
-        elif ans == "3":
+        elif ans == "4":
             print("\n  [INFO] Keluar.")
             return
 
@@ -229,7 +231,7 @@ def main():
     print("  --------------------------------------------------------")
     print()
     print("  Pilih mode instalasi:")
-    print("    [1]  Install Lengkap  (deps + Telegram config + shortcut)")
+    print("    [1]  Install Lengkap  (deps + Telegram config + shortcut otomatis)")
     print("    [2]  Install Cepat    (deps saja)")
     print("    [3]  Keluar / Batal")
     print()
