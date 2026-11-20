@@ -20,10 +20,12 @@ CCTV AI DETECTION/
 ├── yolov8n.pt                  ← Model AI deteksi orang (~6.5 MB)
 ├── yolov8n-pose.pt             ← Model AI pose/kendaraan (~6.8 MB)
 ├── requirements.txt            ← Daftar package Python
-├── setup.bat                   ← ⭐ INSTALLER UTAMA (double-click pertama kali)
-├── install_shortcut.bat        ← Shortcut Desktop
-├── run.py                      ← Launcher utama
+├── setup.bat                   ← ⭐ INSTALLER & LAUNCHER (Windows)
+├── setup.sh                    ← ⭐ INSTALLER & LAUNCHER (Linux/macOS)
+├── launch.py                   ← ⭐ LAUNCHER UNIVERSAL (Cross-Platform)
+├── run.py                      ← Launcher internal
 ├── cctv.pyw                    ← Launcher tanpa console
+├── CARA_INSTALL.txt            ← ⭐ Panduan praktis penerima
 ├── .env.example                ← Template konfigurasi
 ├── README.md
 └── DISTRIBUSI.md               ← File ini
@@ -44,6 +46,7 @@ CCTV AI DETECTION/
 | `dashboard/node_modules/` | Sama, sudah ada `dist/` |
 | `__pycache__/` | Di-generate otomatis oleh Python |
 | `.env` | Berisi token pribadi — **JANGAN ikutkan!** |
+| `.setup_done` | Penanda lokal perangkat Anda — **JANGAN ikutkan!** |
 | `tests/` | Opsional, hanya untuk developer |
 | `.git/` | Riwayat git tidak perlu untuk pengguna akhir |
 | `data/cctv_events.db` | Database akan dibuat ulang otomatis |
@@ -55,9 +58,9 @@ CCTV AI DETECTION/
 
 | Kebutuhan | Versi Minimum | Cara Install |
 |-----------|--------------|-------------|
-| **Windows** | 10 / 11 | — |
+| **Sistem Operasi** | Windows 10/11, Linux, macOS | — |
 | **Python** | 3.11+ | [python.org/downloads](https://www.python.org/downloads/) ⚠️ centang "Add to PATH" |
-| **Internet** | — | Untuk download package saat setup |
+| **Internet** | — | Untuk download package saat pertama kali setup |
 | GPU NVIDIA | Opsional | Untuk performa lebih cepat (CUDA) |
 
 ---
@@ -69,35 +72,26 @@ CCTV AI DETECTION/
 
 2. **Extract ZIP** ke folder mana saja (misal: `D:\CCTV AI DETECTION\`)
 
-3. **Double-click `setup.bat`**
-   - Otomatis install semua dependensi Python
-   - Tanya Telegram Bot Token & Chat ID
-   - Tawarkan buat shortcut Desktop
+3. **Jalankan Installer:**
+   - **Windows**: Double-click `setup.bat`
+   - **Linux/macOS**: Buka terminal, ketik `bash setup.sh`
+   - **Universal**: Buka terminal/cmd, ketik `python launch.py`
 
-4. **Selesai!** Jalankan via shortcut Desktop atau double-click `run.py`
+4. **Sistem otomatis mendeteksi status:**
+   - Jika baru pertama kali: Panduan instalasi otomatis berjalan, mendownload library AI, mengisi token Telegram (opsional), dan membuat shortcut Desktop.
+   - Jika sudah pernah diinstall: Langsung memilih `[1]` untuk menjalankan CCTV AI.
+   - Selesai setup, aplikasi otomatis langsung berjalan dan membuka dashboard di browser (`http://localhost:8000`).
 
 ---
 
 ## ⚙️ Konfigurasi Tambahan (Opsional)
 
 Edit file `config/config.yaml` untuk mengatur:
-- **URL kamera RTSP** (`rtsp://...`)
+- **URL kamera RTSP** (`rtsp://...` atau URL stream lokal)
 - **Zona terlarang** (koordinat ROI)
 - **Sensitivitas deteksi**
 
 Edit file `.env` untuk mengatur:
+- **Telegram Bot Token & Chat ID**
 - **Cloudflare Tunnel** (URL publik yang tetap)
 - **PIN Dashboard** (keamanan akses remote)
-
----
-
-## ❓ Troubleshooting
-
-| Masalah | Solusi |
-|---------|--------|
-| `python tidak dikenali` | Tambah Python ke PATH atau install ulang dengan centang "Add to PATH" |
-| Error install `torchreid` | Jalankan `pip install torchreid --no-deps` lalu `pip install -r requirements.txt` |
-| Dashboard tidak terbuka | Pastikan port 8000 tidak dipakai program lain |
-| Telegram tidak kirim notif | Cek `.env` — pastikan Token dan Chat ID benar |
-| Kamera tidak terdeteksi | Cek URL RTSP di `config/config.yaml` |
-

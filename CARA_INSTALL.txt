@@ -1,84 +1,113 @@
 ================================================================
-     CCTV AI DETECTION — CARA INSTALL DI PERANGKAT BARU
+     CCTV AI DETECTION — PANDUAN INSTALASI & MENJALANKAN
 ================================================================
 
-PRASYARAT (lakukan SEKALI sebelum mulai):
------------------------------------------
-1. Install Python 3.11 atau lebih baru:
+PRASYARAT (Lakukan SEKALI di perangkat baru):
+--------------------------------------------
+1. Install Python 3.11 atau lebih baru dari:
    https://www.python.org/downloads/
 
-   PENTING: Saat instalasi Python, CENTANG kotak:
-   [v] "Add Python to PATH"
-   Jika tidak dicentang, ulangi instalasi Python!
+   ⚠️ PENTING: Saat instalasi Python, WAJIB CENTANG KOTAK:
+   [v] "Add Python to PATH" (atau "Add python.exe to PATH")
+   Jika tidak dicentang, Python tidak akan terbaca di Command Prompt!
 
-2. Pastikan koneksi internet aktif.
+2. Pastikan koneksi internet aktif untuk download dependensi AI.
 
 
-LANGKAH INSTALASI:
-------------------
+================================================================
+LANGKAH INSTALASI OTOMATIS & RUN (WINDOWS):
+================================================================
 1. Extract file ZIP ke folder mana saja.
-   Contoh: D:\CCTV AI DETECTION\
+   Contoh: D:\CCTV AI DETECTION\ atau C:\CCTV AI\
 
-2. Buka folder hasil extract.
+2. Buka folder hasil extract tersebut.
 
-3. Double-click file:  setup.bat
+3. Double-click file: setup.bat
 
-4. Ikuti instruksi yang muncul di layar:
-   - Proses install otomatis (5-15 menit, tergantung internet)
-   - Masukkan Telegram Bot Token saat diminta
-   - Masukkan Telegram Chat ID saat diminta
-   - Pilih y lalu Enter untuk buat shortcut di Desktop
+4. Sistem akan otomatis mendeteksi status instalasi:
 
-5. Setelah selesai, tutup jendela setup.
+   A. JIKA BELUM TERINSTALL DI PERANGKAT INI:
+      - Layar akan menampilkan: [STATUS: SISTEM BELUM TERINSTALL]
+      - Pilih mode instalasi:
+          [1] Install Lengkap (Rekomendasi: AI deps + .env + shortcut)
+          [2] Install Cepat   (Hanya library AI, skip konfigurasi)
+          [3] Keluar
+      - Tekan Enter. Sistem akan otomatis mendownload semua library AI
+        (OpenCV, PyTorch, YOLOv8, FastAPI). Progres download akan
+        terlihat jelas di layar (estimasi 5-15 menit).
+      - Jika memilih [1], masukkan Telegram Bot Token & Chat ID
+        (opsional, bisa tekan Enter untuk isi nanti).
+      - Pilih 'y' jika ingin membuat shortcut "CCTV AI" di Desktop.
+      - Setelah selesai, tekan Enter: SISTEM AKAN LANGSUNG JALAN!
+
+   B. JIKA SUDAH PERNAH DIINSTALL SEBELUMNYA:
+      - Layar akan menampilkan: [STATUS: SISTEM SUDAH TERINSTALL]
+      - Cukup tekan [1] lalu Enter: CCTV AI langsung berjalan otomatis
+        tanpa perlu download ulang!
+      - Ada juga opsi [2] jika ingin Install Ulang / Perbarui Dependensi.
 
 
-CARA MENJALANKAN APLIKASI:
---------------------------
-Pilih salah satu cara:
-  A. Double-click shortcut "CCTV AI" di Desktop (jika dibuat)
-  B. Double-click file run.py di folder aplikasi
-  C. Buka Command Prompt di folder aplikasi, ketik: python run.py
+================================================================
+PENGGUNA LINUX / MACOS (CROSS-PLATFORM):
+================================================================
+Buka Terminal di folder CCTV AI, lalu jalankan salah satu:
+  - Linux/macOS : bash setup.sh
+  - Universal   : python3 launch.py
 
-Dashboard (tampilan web) akan terbuka otomatis di browser:
+
+================================================================
+CARA MENJALANKAN APLIKASI SETELAH TERINSTALL:
+================================================================
+Pilih salah satu cara termudah:
+  1. Double-click file: setup.bat (otomatis deteksi & langsung jalan)
+  2. Double-click shortcut "CCTV AI" di Desktop (jika sudah dibuat)
+  3. Double-click file: run.py
+  4. Mode Hening (tanpa jendela terminal): Double-click file cctv.pyw
+
+Dashboard Web CCTV AI akan terbuka otomatis di browser Anda:
   http://localhost:8000
 
 
+================================================================
 CARA MENDAPATKAN TELEGRAM BOT TOKEN & CHAT ID:
------------------------------------------------
-Bot Token:
-  1. Buka Telegram, cari @BotFather
-  2. Ketik /newbot
-  3. Ikuti instruksi, copy token yang diberikan
-  Contoh token: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+================================================================
+Bot Token (untuk kirim foto deteksi ke Telegram):
+  1. Buka aplikasi Telegram, cari bot: @BotFather
+  2. Ketik /newbot lalu ikuti petunjuk nama bot Anda
+  3. Salin (copy) HTTP API Token yang diberikan
+  Contoh: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
 
-Chat ID:
-  1. Buka Telegram, cari @userinfobot
-  2. Ketik /start
-  3. Bot akan balas dengan ID Anda
+Chat ID (ID akun/grup penerima notifikasi):
+  1. Buka Telegram, cari bot: @userinfobot
+  2. Klik Start atau ketik /start
+  3. Bot akan membalas dengan ID Anda
   Contoh: 123456789 (pribadi) atau -123456789 (grup)
 
-
-TROUBLESHOOTING (Jika Ada Masalah):
-------------------------------------
-Masalah: "python tidak dikenali" / python not found
-Solusi : Install ulang Python, centang "Add Python to PATH"
-
-Masalah: Error saat install dependensi (torchreid, dll)
-Solusi : Jalankan setup.bat lagi, atau hubungi pemberi aplikasi
-
-Masalah: Dashboard tidak terbuka di browser
-Solusi : Buka browser, ketik manual: http://localhost:8000
-
-Masalah: Telegram tidak kirim notifikasi
-Solusi : Cek file .env — pastikan Token dan Chat ID benar
-         Edit file .env dengan Notepad
-
-Masalah: Kamera tidak terdeteksi / stream error
-Solusi : Cek URL kamera di file config\config.yaml
-         Pastikan kamera menyala dan terhubung ke jaringan
+Catatan: Konfigurasi ini disimpan di file .env. Anda dapat mengedit
+file .env menggunakan Notepad kapan saja.
 
 
 ================================================================
-   Butuh bantuan? Hubungi pemberi aplikasi ini.
+TROUBLESHOOTING (SOLUSI MASALAH):
 ================================================================
+Masalah: "Python tidak ditemukan di PATH"
+Solusi : Install ulang Python dari python.org dan pastikan centang
+         "Add Python to PATH".
 
+Masalah: Jendela tertutup atau koneksi putus saat download dependensi
+Solusi : Koneksi internet terputus. Pastikan internet stabil, lalu
+         double-click setup.bat kembali.
+
+Masalah: Dashboard tidak muncul di browser
+Solusi : Buka browser secara manual (Chrome/Edge/Firefox), ketik alamat:
+         http://localhost:8000
+
+Masalah: Notifikasi Telegram tidak masuk ke HP
+Solusi : Buka file .env dengan Notepad. Pastikan TELEGRAM_BOT_TOKEN
+         dan TELEGRAM_CHAT_ID sudah terisi dengan benar tanpa spasi.
+
+Masalah: URL RTSP kamera CCTV tidak tampil
+Solusi : Buka file config\config.yaml dengan Notepad. Sesuaikan alamat
+         IP/RTSP kamera CCTV Anda pada bagian rtsp_url.
+
+================================================================
