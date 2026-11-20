@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 # Path to the built React frontend
 DASHBOARD_DIR = Path(__file__).parent.parent.parent / "dashboard" / "dist"
 
+# Cache-busting headers for index.html to guarantee clients always load the latest UI bundle
+HTML_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
 
 class SPAFallbackMiddleware(BaseHTTPMiddleware):
     """Middleware to serve the SPA index.html for non-API, non-asset paths.
@@ -50,7 +57,7 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
             # Fall back to index.html for SPA routing
             index_path = DASHBOARD_DIR / "index.html"
             if index_path.exists():
-                return FileResponse(str(index_path))
+                return FileResponse(str(index_path), headers=HTML_NO_CACHE_HEADERS)
         
         return response
 
@@ -128,7 +135,7 @@ def create_app(cctv_app) -> FastAPI:
         # Root path serves index.html directly
         @api_app.get("/")
         async def serve_index():
-            return FileResponse(str(DASHBOARD_DIR / "index.html"))
+            return FileResponse(str(DASHBOARD_DIR / "index.html"), headers=HTML_NO_CACHE_HEADERS)
 
         logger.info("Dashboard frontend enabled: serving from %s", DASHBOARD_DIR)
     else:
