@@ -147,8 +147,8 @@ echo  [STATUS] INSTALASI BERHASIL!
 echo  ========================================================
 echo  Semua dependensi dan komponen telah siap digunakan.
 echo.
-echo  >> UNTUK MENGAKTIFKAN CCTV AI:
-echo     Buka shortcut "CCTV AI" di Desktop Anda!
+echo  --- CARA MENGAKTIFKAN CCTV AI ---
+echo  Buka shortcut "CCTV AI" di Desktop Anda!
 echo.
 echo  Jendela ini akan menutup otomatis dalam 3 detik...
 timeout /t 3 >nul

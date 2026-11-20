@@ -1,5 +1,6 @@
 # Environment variables (credentials) — JANGAN pernah di-commit
 .env
+.setup_done
 
 # Data & database (terlalu besar, sensitif)
 data/
