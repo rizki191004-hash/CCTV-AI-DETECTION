@@ -2,91 +2,54 @@
 setlocal enabledelayedexpansion
 
 :: ================================================================
-:: setup.bat --- CCTV AI Detection: Installer Otomatis
-:: Windows installer: install otomatis, buat shortcut, lalu tutup.
-:: Untuk menjalankan CCTV AI: buka shortcut "CCTV AI" di Desktop!
+:: setup.bat --- CCTV AI Detection: Setup & Lifecycle Manager
+:: Pilihan:
+::   [1] Install Semua Otomatis Sistem & Shortcut Desktop
+::   [2] Hapus Semua Komponen Sistem & Shortcut (Uninstall)
+::   [3] Keluar (Exit)
 :: ================================================================
 
-title CCTV AI Detection - Setup
+title CCTV AI Detection - Setup Menu
 cd /d "%~dp0"
 
-:CEK_STATUS
+:MENU_UTAMA
 cls
 echo.
 echo  +========================================================+
-echo  ^|            CCTV AI Detection --- Setup                 ^|
+echo  ^|            CCTV AI Detection --- Setup Menu            ^|
 echo  +========================================================+
 echo.
-
 if exist "%~dp0.setup_done" (
-    echo  [STATUS] Sistem CCTV AI sudah terinstall di perangkat ini.
-    echo  Silakan buka shortcut "CCTV AI" di Desktop untuk mengaktifkan AI.
-    echo.
-    echo  Pilihan:
-    echo    [1] Jalankan CCTV AI Sekarang
-    echo    [2] Buat / Perbaiki Shortcut CCTV AI di Desktop
-    echo    [3] Install Ulang / Perbarui Dependensi
-    echo    [4] Keluar (Default)
-    echo.
-    set /p PILIHAN_SUDAH="  Masukkan pilihan (1/2/3/4) [Default 4]: "
-    if "!PILIHAN_SUDAH!"=="" set PILIHAN_SUDAH=4
-    if "!PILIHAN_SUDAH!"=="1" goto JALANKAN_SISTEM
-    if "!PILIHAN_SUDAH!"=="2" goto BUAT_SHORTCUT_SAJA
-    if "!PILIHAN_SUDAH!"=="3" goto KONFIRMASI_SETUP_ULANG
-    if "!PILIHAN_SUDAH!"=="4" goto KELUAR_CEPAT
-    goto KELUAR_CEPAT
-)
-
-:: --- Belum terinstall: mulai instalasi otomatis ---
-echo  [STATUS] Memulai proses instalasi otomatis untuk perangkat ini...
-echo.
-echo  Pilih mode instalasi:
-echo    [1] Install Lengkap (Otomatis: Dependensi + Shortcut Desktop)
-echo    [2] Keluar / Batalkan
-echo.
-set /p INSTALL_MODE="  Masukkan pilihan (1/2) [Default 1]: "
-if "!INSTALL_MODE!"=="" set INSTALL_MODE=1
-if "!INSTALL_MODE!"=="1" goto MULAI_SETUP
-if "!INSTALL_MODE!"=="2" goto KELUAR_CEPAT
-goto MULAI_SETUP
-
-:BUAT_SHORTCUT_SAJA
-echo.
-echo  --------------------------------------------------------
-echo  Membuat shortcut tunggal 'CCTV AI' di Desktop...
-echo  --------------------------------------------------------
-if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
-    if %ERRORLEVEL% EQU 0 (
-        echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda!
-    ) else (
-        echo  [PERINGATAN] Gagal membuat shortcut via PowerShell.
-    )
+    echo  [STATUS] Sistem CCTV AI saat ini: TERINSTALL
 ) else (
-    echo  [ERROR] File scripts\create_desktop_shortcut.ps1 tidak ditemukan!
+    echo  [STATUS] Sistem CCTV AI saat ini: BELUM TERINSTALL
 )
 echo.
-echo  Menutup jendela dalam 3 detik...
-timeout /t 3 >nul
-exit /b 0
-
-:KONFIRMASI_SETUP_ULANG
+echo  Pilih tindakan:
+echo    [1] Install Semua Otomatis Sistem ^& Shortcut Desktop
+echo    [2] Hapus Semua Komponen Sistem ^& Shortcut (Uninstall)
+echo    [3] Keluar (Exit)
 echo.
-echo  --------------------------------------------------------
-echo  [KONFIRMASI] Anda memilih Setup Ulang / Perbarui.
-echo  --------------------------------------------------------
-del /f /q "%~dp0.setup_done" >nul 2>&1
-echo  Penanda instalasi lama telah dibersihkan.
-echo  Memulai proses instalasi baru...
+set /p PILIHAN="  Masukkan pilihan (1/2/3) [Default 1]: "
+if "!PILIHAN!"=="" set PILIHAN=1
+if "!PILIHAN!"=="1" goto PROSES_INSTALL
+if "!PILIHAN!"=="2" goto PROSES_UNINSTALL
+if "!PILIHAN!"=="3" goto KELUAR
+echo.
+echo  [!] Pilihan tidak valid. Silakan ketik 1, 2, atau 3.
 timeout /t 2 >nul
-goto CEK_STATUS
+goto MENU_UTAMA
 
-:MULAI_SETUP
+:: ================================================================
+:: [1] PROSES INSTALL LENGKAP & SHORTCUT DESKTOP
+:: ================================================================
+:PROSES_INSTALL
+cls
 echo.
 echo  ========================================================
-echo  [PROSES] MEMULAI INSTALASI OTOMATIS
+echo  [PROSES] MEMULAI INSTALASI OTOMATIS SISTEM ^& SHORTCUT
 echo  ========================================================
-echo  Harap tunggu, sistem sedang memasang seluruh kebutuhan AI...
+echo  Harap tunggu, proses ini menyiapkan seluruh kebutuhan AI...
 echo.
 
 :: --- LANGKAH 1: Cek Python ---
@@ -118,7 +81,7 @@ echo.
 
 :: --- LANGKAH 3: Install Dependensi ---
 echo  [3/5] Menginstall Dependensi AI (requirements.txt)...
-echo        Mengunduh library (OpenCV, YOLO, PyTorch, FastAPI)...
+echo        Mengunduh paket AI (OpenCV, YOLO, PyTorch, FastAPI)...
 python -m pip install -r "%~dp0requirements.txt"
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -168,7 +131,7 @@ echo  [5/5] Membuat Shortcut "CCTV AI" di Desktop...
 if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
     if %ERRORLEVEL% EQU 0 (
-        echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda!
+        echo  [OK] Shortcut tunggal "CCTV AI" berhasil dibuat di Desktop Anda!
     ) else (
         echo  [INFO] Pembuatan shortcut otomatis dilewati.
     )
@@ -178,7 +141,6 @@ if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
 echo.
 
 :: --- SELESAI SETUP & KELUAR OTOMATIS ---
-:SELESAI_SETUP
 echo setup_done > "%~dp0.setup_done"
 echo  ========================================================
 echo  [STATUS] INSTALASI BERHASIL!
@@ -192,27 +154,49 @@ echo  Jendela ini akan menutup otomatis dalam 3 detik...
 timeout /t 3 >nul
 exit /b 0
 
-:: --- RUN PROGRAM JIKA DIMINTA VIA MENU ---
-:JALANKAN_SISTEM
+:: ================================================================
+:: [2] PROSES HAPUS SEMUA KOMPONEN SISTEM & SHORTCUT (UNINSTALL)
+:: ================================================================
+:PROSES_UNINSTALL
 cls
 echo.
-echo  +========================================================+
-echo  ^|       CCTV AI Detection --- Menjalankan Sistem         ^|
-echo  +========================================================+
+echo  ========================================================
+echo  [PROSES] PEMBERSIHAN SISTEM ^& PENGHAPUSAN SHORTCUT
+echo  ========================================================
 echo.
-echo  [PEMBERITAHUAN SISTEM]
-echo  - Live Dashboard Lokal : http://localhost:8000
-echo  - Cloudflare Tunnel    : Dikelola otomatis ^(cek log/Telegram^)
-echo  - Cara Menghentikan    : Tekan Ctrl+C pada jendela ini
+echo  1. Menghentikan proses CCTV AI dan Cloudflare latar belakang...
+taskkill /F /IM cloudflared.exe >nul 2>&1
+powershell -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*src\main.py*' -or $_.CommandLine -like '*run.py*' -or $_.CommandLine -like '*cctv.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+echo     [OK] Proses latar belakang telah dihentikan.
+
 echo.
-echo  Memulai sistem CCTV AI...
+echo  2. Menghapus shortcut "CCTV AI" dari Desktop...
+powershell -Command "$dirs = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'), (Join-Path [Environment]::GetFolderPath('UserProfile') 'Desktop'), (Join-Path [Environment]::GetFolderPath('UserProfile') 'OneDrive\Desktop')); foreach ($d in $dirs) { if ($d) { $lnk = Join-Path $d 'CCTV AI.lnk'; if (Test-Path $lnk) { Remove-Item $lnk -Force -ErrorAction SilentlyContinue } } }" >nul 2>&1
+echo     [OK] Shortcut Desktop telah dibersihkan.
+
 echo.
-python "%~dp0run.py"
+echo  3. Membersihkan status setup dan runtime temporary...
+del /f /q "%~dp0.setup_done" >nul 2>&1
+del /f /q "%~dp0data\cctv.pid" >nul 2>&1
+del /f /q "%~dp0data\cctv_events.db" >nul 2>&1
+for /d /r "%~dp0" %%d in (__pycache__) do @if exist "%%d" rd /s /q "%%d" >nul 2>&1
+echo     [OK] Status setup dan database event berhasil di-reset.
+
 echo.
 echo  ========================================================
-echo  [INFO] Sistem CCTV AI Detection telah dihentikan.
+echo  [STATUS] PEMBERSIHAN SELESAI!
 echo  ========================================================
+echo  Shortcut Desktop dan komponen sistem telah dihapus.
+echo  Sistem CCTV AI telah kembali ke kondisi awal yang bersih.
+echo.
+echo  Jendela ini akan menutup otomatis dalam 3 detik...
 timeout /t 3 >nul
+exit /b 0
+
+:: ================================================================
+:: [3] KELUAR
+:: ================================================================
+:KELUAR
 exit /b 0
 
 :GAGAL
@@ -225,6 +209,3 @@ echo.
 echo  Tekan tombol apa saja untuk menutup jendela ini...
 pause >nul
 exit /b 1
-
-:KELUAR_CEPAT
-exit /b 0

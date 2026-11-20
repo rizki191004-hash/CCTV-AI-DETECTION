@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
 """
-launch.py --- CCTV AI Detection: Universal Cross-Platform Launcher
-=================================================================
-Jalankan file ini di platform mana saja:
-  Windows : python launch.py
-  Linux   : python3 launch.py
-  macOS   : python3 launch.py
-
-Perilaku:
-  - Jika setup BELUM dilakukan (.setup_done tidak ada):
-      Tampilkan status BELUM TERINSTALL, jalankan setup otomatis,
-      tampilkan pilihan [1] Jalankan Sekarang / [2] Keluar.
-  - Jika setup SUDAH dilakukan:
-      Tampilkan status SUDAH TERINSTALL, berikan opsi langsung jalankan, buat ulang shortcut, atau setup ulang.
+launch.py --- CCTV AI Detection: Setup & Lifecycle Manager
+=========================================================
+Pilihan:
+  [1] Install Semua Otomatis Sistem & Shortcut Desktop
+  [2] Hapus Semua Komponen Sistem & Shortcut (Uninstall)
+  [3] Keluar (Exit)
 """
 
 import os
@@ -118,7 +111,7 @@ def step_install_deps():
     # Check dashboard dist
     dist_index = os.path.join(PROJECT_ROOT, "dashboard", "dist", "index.html")
     if os.path.exists(dist_index):
-        print("  [OK] Komponen tampilan Dashboard Web ditemukan.")
+        print("  [OK] Komponen tampilan Dashboard Web siap.")
     else:
         print("  [PERINGATAN] Folder dashboard/dist belum ditemukan!")
 
@@ -126,31 +119,26 @@ def step_install_deps():
 def step_config_env():
     print()
     print("  --------------------------------------------------------")
-    print("  [Langkah 4/5] Konfigurasi Pengaturan (.env)...")
+    print("  [Langkah 4/5] Menyiapkan Konfigurasi (.env)...")
     print("  --------------------------------------------------------")
     if os.path.exists(ENV_FILE):
         print("  [OK] File .env sudah ada (konfigurasi dipertahankan).")
         return
-    print("  File .env belum ada. Isi konfigurasi dasar Telegram Notifier:")
-    print("  (Tekan Enter jika ingin melewati dan mengisi nanti di file .env)")
-    print()
-    bot_token = input("  1. Masukkan Telegram Bot Token (opsional): ").strip()
-    chat_id   = input("  2. Masukkan Telegram Chat ID   (opsional): ").strip()
     with open(ENV_FILE, "w", encoding="utf-8") as f:
         f.write("# CCTV AI Detection --- Konfigurasi otomatis\n")
-        f.write(f"TELEGRAM_BOT_TOKEN={bot_token}\n")
-        f.write(f"TELEGRAM_CHAT_ID={chat_id}\n")
+        f.write("TELEGRAM_BOT_TOKEN=\n")
+        f.write("TELEGRAM_CHAT_ID=\n")
         f.write("\n# Cloudflare Quick Tunnel (kosongkan = otomatis gratis)\n")
         f.write("# CLOUDFLARE_TUNNEL_TOKEN=\n")
         f.write("\n# PIN Dashboard Mobile (kosongkan = tanpa PIN)\n")
         f.write("# DASHBOARD_PIN=\n")
-    print("\n  [OK] File konfigurasi .env berhasil dibuat!")
+    print("  [OK] File konfigurasi .env dasar berhasil dibuat!")
 
 
 def create_shortcut():
     print()
     print("  --------------------------------------------------------")
-    print("  Membuat Shortcut Desktop Otomatis...")
+    print("  [Langkah 5/5] Membuat Shortcut Desktop Otomatis...")
     print("  --------------------------------------------------------")
     if IS_WINDOWS:
         ps1 = os.path.join(PROJECT_ROOT, "scripts", "create_desktop_shortcut.ps1")
@@ -176,17 +164,15 @@ def create_shortcut():
             print("  [INFO] Shortcut terminal dilewati.")
 
 
-def do_setup(mode: str):
-    print("\n  ========================================================")
-    print("  [INFO] MEMULAI PROSES INSTALASI OTOMATIS")
-    print("  ========================================================")
+def do_setup():
+    clear()
+    banner("Memulai Instalasi Otomatis Sistem & Shortcut")
     step_check_python()
     step_upgrade_pip()
     step_install_deps()
-    if mode == "1":
-        step_config_env()
-        create_shortcut()
-    # Tandai setup selesai
+    step_config_env()
+    create_shortcut()
+
     with open(SENTINEL, "w") as f:
         f.write("setup_done\n")
 
@@ -204,66 +190,74 @@ def do_setup(mode: str):
     sys.exit(0)
 
 
+def do_uninstall():
+    clear()
+    banner("Pembersihan Sistem & Penghapusan Shortcut")
+    print("  1. Menghentikan proses CCTV AI latar belakang...")
+    if IS_WINDOWS:
+        subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], capture_output=True)
+        subprocess.run([
+            "powershell", "-Command",
+            "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*src\\main.py*' -or $_.CommandLine -like '*run.py*' -or $_.CommandLine -like '*cctv.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+        ], capture_output=True)
+    print("     [OK] Proses latar belakang telah dihentikan.")
+
+    print("\n  2. Menghapus shortcut CCTV AI dari Desktop...")
+    if IS_WINDOWS:
+        subprocess.run([
+            "powershell", "-Command",
+            "$dirs = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'), (Join-Path [Environment]::GetFolderPath('UserProfile') 'Desktop'), (Join-Path [Environment]::GetFolderPath('UserProfile') 'OneDrive\\Desktop')); foreach ($d in $dirs) { if ($d) { $lnk = Join-Path $d 'CCTV AI.lnk'; if (Test-Path $lnk) { Remove-Item $lnk -Force -ErrorAction SilentlyContinue } } }"
+        ], capture_output=True)
+    else:
+        link = "/usr/local/bin/cctv-ai"
+        if os.path.exists(link):
+            try:
+                os.remove(link)
+            except Exception:
+                pass
+    print("     [OK] Shortcut Desktop telah dibersihkan.")
+
+    print("\n  3. Membersihkan status setup dan runtime temporary...")
+    for f in [SENTINEL, os.path.join(PROJECT_ROOT, "data", "cctv.pid"), os.path.join(PROJECT_ROOT, "data", "cctv_events.db")]:
+        if os.path.exists(f):
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+    print("     [OK] Status setup berhasil di-reset.")
+
+    print("\n  ========================================================")
+    print("  [STATUS] PEMBERSIHAN SELESAI!")
+    print("  ========================================================")
+    print("  Shortcut Desktop dan komponen sistem telah dihapus.")
+    print("  Sistem CCTV AI telah kembali ke kondisi awal yang bersih.")
+    print("\n  Jendela ini akan menutup otomatis dalam 3 detik...")
+    import time
+    time.sleep(3)
+    sys.exit(0)
+
+
 def main():
     clear()
-    banner("CCTV AI Detection --- Smart Setup & Launcher")
+    banner("CCTV AI Detection --- Setup Menu")
 
-    # Jika sudah pernah setup
     if os.path.exists(SENTINEL):
-        print("  [PEMBERITAHUAN STATUS]")
-        print("  --------------------------------------------------------")
-        print("  STATUS: SISTEM SUDAH TERINSTALL SEBELUMNYA.")
-        print("  Semua dependensi dan konfigurasi sudah siap digunakan.")
-        print("  --------------------------------------------------------")
-        print()
-        print("  Pilih opsi:")
-        print("    [1] Langsung Jalankan CCTV AI (Rekomendasi)")
-        print("    [2] Buat / Perbaiki Shortcut Desktop")
-        print("    [3] Install Ulang / Perbarui Dependensi (Setup Ulang)")
-        print("    [4] Keluar")
-        print()
-        ans = input("  Masukkan pilihan (1/2/3/4) [Default 1]: ").strip()
-        if ans == "" or ans == "1":
-            run_program()
-            return
-        elif ans == "2":
-            create_shortcut()
-            pause("\n  Tekan Enter untuk kembali ke menu...")
-            main()
-            return
-        elif ans == "3":
-            if os.path.exists(SENTINEL):
-                os.remove(SENTINEL)
-            print("\n  [INFO] Penanda setup dibersihkan. Memulai setup ulang...")
-        elif ans == "4":
-            print("\n  [INFO] Keluar.")
-            return
-
-    # Setup pertama kali
-    print("  [PEMBERITAHUAN STATUS]")
-    print("  --------------------------------------------------------")
-    print("  STATUS: SISTEM BELUM TERINSTALL DI PERANGKAT INI.")
-    print("  Sistem akan memandu instalasi otomatis step-by-step.")
-    print("  --------------------------------------------------------")
+        print("  [STATUS] Sistem CCTV AI saat ini: TERINSTALL")
+    else:
+        print("  [STATUS] Sistem CCTV AI saat ini: BELUM TERINSTALL")
     print()
-    print("  Pilih mode instalasi:")
-    print("    [1]  Install Lengkap  (deps + Telegram config + shortcut otomatis)")
-    print("    [2]  Install Cepat    (deps saja)")
-    print("    [3]  Keluar / Batal")
+    print("  Pilih tindakan:")
+    print("    [1] Install Semua Otomatis Sistem & Shortcut Desktop")
+    print("    [2] Hapus Semua Komponen Sistem & Shortcut (Uninstall)")
+    print("    [3] Keluar (Exit)")
     print()
-    while True:
-        mode = input("  Masukkan pilihan (1/2/3) [Default 1]: ").strip()
-        if mode == "" or mode == "1":
-            mode = "1"
-            break
-        elif mode == "2":
-            break
-        elif mode == "3":
-            print("\n  [INFO] Dibatalkan oleh pengguna.")
-            return
-        print("  [!] Pilihan tidak valid.")
-
-    do_setup(mode)
+    ans = input("  Masukkan pilihan (1/2/3) [Default 1]: ").strip()
+    if ans == "" or ans == "1":
+        do_setup()
+    elif ans == "2":
+        do_uninstall()
+    elif ans == "3":
+        sys.exit(0)
 
 
 if __name__ == "__main__":
