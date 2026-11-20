@@ -191,19 +191,17 @@ def do_setup(mode: str):
         f.write("setup_done\n")
 
     print("\n  ========================================================")
-    print("  [STATUS] INSTALASI OTOMATIS BERHASIL!")
+    print("  [STATUS] INSTALASI BERHASIL!")
     print("  ========================================================")
-    print("  Pilih langkah selanjutnya:")
-    print("    [1] Langsung Jalankan CCTV AI Sekarang (Buka Dashboard)")
-    print("    [2] Selesai & Keluar (Jalankan nanti via Shortcut Desktop)")
+    print("  Semua dependensi dan komponen telah siap digunakan.")
     print()
-    pilih = input("  Masukkan pilihan (1/2) [Default 1]: ").strip()
-    if pilih == "2":
-        print("\n  [INFO] Selesai. Anda dapat menjalankan CCTV AI kapan saja via Desktop.")
-        pause("\n  Tekan Enter untuk menutup...")
-        sys.exit(0)
-
-    run_program()
+    print("  >> UNTUK MENGAKTIFKAN CCTV AI:")
+    print("     Buka shortcut 'CCTV AI' di Desktop Anda!")
+    print()
+    print("  Jendela ini akan menutup otomatis dalam 3 detik...")
+    import time
+    time.sleep(3)
+    sys.exit(0)
 
 
 def main():

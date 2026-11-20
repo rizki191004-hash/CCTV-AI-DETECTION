@@ -28,26 +28,27 @@ LANGKAH INSTALASI OTOMATIS & RUN (WINDOWS):
 
    A. JIKA BELUM TERINSTALL DI PERANGKAT INI:
       - Layar akan menampilkan: [STATUS: SISTEM BELUM TERINSTALL]
-      - Pilih mode instalasi:
-          [1] Install Lengkap (Rekomendasi: AI deps + .env + shortcut otomatis)
-          [2] Install Cepat   (Hanya library AI, skip konfigurasi/shortcut)
-          [3] Keluar
-      - Tekan Enter. Sistem akan otomatis mendownload semua library AI
-        (OpenCV, PyTorch, YOLOv8, FastAPI). Progres download akan
-        terlihat jelas di layar (estimasi 5-15 menit).
-      - Jika memilih [1], masukkan Telegram Bot Token & Chat ID
-        (opsional, bisa tekan Enter untuk isi nanti).
-      - Shortcut "CCTV AI" akan dibuat secara 100% OTOMATIS di Desktop
-        Anda (mendukung Desktop Lokal, OneDrive Desktop, dan Public).
-      - Setelah selesai, tekan Enter: SISTEM AKAN LANGSUNG BERJALAN!
+      - Pilih [1] lalu tekan Enter (atau langsung tekan Enter).
+      - Sistem akan otomatis mendownload semua library AI (OpenCV, PyTorch,
+        YOLOv8, FastAPI). Progres download terlihat jelas di layar.
+      - Shortcut "CCTV AI" dibuat secara 100% OTOMATIS di Desktop Anda
+        (hanya 1 shortcut tunggal, rapi, dan langsung muncul di monitor).
+      - Setelah selesai, jendela CMD akan MENUTUP SENDIRI secara otomatis!
 
-   B. JIKA SUDAH PERNAH DIINSTALL SEBELUMNYA:
-      - Layar akan menampilkan: [STATUS: SISTEM SUDAH TERINSTALL]
+   B. CARA MENGAKTIFKAN CCTV AI:
+      - Cukup double-click shortcut "CCTV AI" di Desktop Anda!
+      - Sistem CCTV AI langsung aktif dan otomatis membuka web browser:
+        http://localhost:8000
+      - Jika di-double-click lagi saat aktif, muncul opsi untuk mematikan CCTV.
+
+   C. JIKA setup.bat DIBUKA KEMBALI SAAT SUDAH TERINSTALL:
+      - Layar menampilkan bahwa sistem sudah terinstall dan mengarahkan
+        untuk menggunakan shortcut "CCTV AI" di Desktop.
       - Pilihan menu:
-          [1] Langsung Jalankan CCTV AI (Rekomendasi)
+          [1] Jalankan CCTV AI Sekarang
           [2] Buat / Perbaiki Shortcut CCTV AI di Desktop
-          [3] Install Ulang / Perbarui Dependensi (Setup Ulang)
-          [4] Keluar
+          [3] Install Ulang / Perbarui Dependensi
+          [4] Keluar (Default)
       - Cukup tekan [1] lalu Enter: CCTV AI langsung berjalan otomatis
         tanpa perlu download ulang!
       - Jika shortcut di Desktop hilang/terhapus, pilih opsi [2] untuk

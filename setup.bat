@@ -2,66 +2,53 @@
 setlocal enabledelayedexpansion
 
 :: ================================================================
-:: setup.bat --- CCTV AI Detection: Smart Setup & Launcher
-:: Windows launcher: setup otomatis jika belum, lalu langsung run.
+:: setup.bat --- CCTV AI Detection: Installer Otomatis
+:: Windows installer: install otomatis, buat shortcut, lalu tutup.
+:: Untuk menjalankan CCTV AI: buka shortcut "CCTV AI" di Desktop!
 :: ================================================================
 
-title CCTV AI Detection - Launcher
+title CCTV AI Detection - Setup
 cd /d "%~dp0"
 
 :CEK_STATUS
 cls
 echo.
 echo  +========================================================+
-echo  ^|       CCTV AI Detection --- Smart Setup ^& Launcher     ^|
+echo  ^|            CCTV AI Detection --- Setup                 ^|
 echo  +========================================================+
 echo.
 
 if exist "%~dp0.setup_done" (
-    echo  [PEMBERITAHUAN STATUS]
-    echo  --------------------------------------------------------
-    echo  STATUS: SISTEM SUDAH TERINSTALL SEBELUMNYA.
-    echo  Semua dependensi dan konfigurasi sudah siap digunakan.
-    echo  --------------------------------------------------------
+    echo  [STATUS] Sistem CCTV AI sudah terinstall di perangkat ini.
+    echo  Silakan buka shortcut "CCTV AI" di Desktop untuk mengaktifkan AI.
     echo.
-    echo  Pilih opsi:
-    echo    [1] Langsung Jalankan CCTV AI (Rekomendasi)
+    echo  Pilihan:
+    echo    [1] Jalankan CCTV AI Sekarang
     echo    [2] Buat / Perbaiki Shortcut CCTV AI di Desktop
-    echo    [3] Install Ulang / Perbarui Dependensi (Setup Ulang)
-    echo    [4] Keluar
+    echo    [3] Install Ulang / Perbarui Dependensi
+    echo    [4] Keluar (Default)
     echo.
-    set /p PILIHAN_SUDAH="  Masukkan pilihan (1/2/3/4) [Default 1]: "
-    if "!PILIHAN_SUDAH!"=="" set PILIHAN_SUDAH=1
+    set /p PILIHAN_SUDAH="  Masukkan pilihan (1/2/3/4) [Default 4]: "
+    if "!PILIHAN_SUDAH!"=="" set PILIHAN_SUDAH=4
     if "!PILIHAN_SUDAH!"=="1" goto JALANKAN_SISTEM
     if "!PILIHAN_SUDAH!"=="2" goto BUAT_SHORTCUT_SAJA
     if "!PILIHAN_SUDAH!"=="3" goto KONFIRMASI_SETUP_ULANG
-    if "!PILIHAN_SUDAH!"=="4" goto KELUAR
-    echo.
-    echo  [!] Pilihan tidak valid. Silakan ketik 1, 2, 3, atau 4.
-    timeout /t 2 >nul
-    goto CEK_STATUS
-) else (
-    echo  [PEMBERITAHUAN STATUS]
-    echo  --------------------------------------------------------
-    echo  STATUS: SISTEM BELUM TERINSTALL DI PERANGKAT INI.
-    echo  Sistem akan memandu instalasi otomatis step-by-step.
-    echo  --------------------------------------------------------
-    echo.
-    echo  Pilih mode instalasi:
-    echo    [1] Install Lengkap (Dependensi + Konfigurasi .env + Shortcut Otomatis)
-    echo    [2] Install Cepat   (Hanya Dependensi, skip konfigurasi/shortcut)
-    echo    [3] Keluar / Batalkan
-    echo.
-    set /p INSTALL_MODE="  Masukkan pilihan (1/2/3) [Default 1]: "
-    if "!INSTALL_MODE!"=="" set INSTALL_MODE=1
-    if "!INSTALL_MODE!"=="1" goto MULAI_SETUP
-    if "!INSTALL_MODE!"=="2" goto MULAI_SETUP
-    if "!INSTALL_MODE!"=="3" goto KELUAR
-    echo.
-    echo  [!] Pilihan tidak valid. Silakan ketik 1, 2, atau 3.
-    timeout /t 2 >nul
-    goto CEK_STATUS
+    if "!PILIHAN_SUDAH!"=="4" goto KELUAR_CEPAT
+    goto KELUAR_CEPAT
 )
+
+:: --- Belum terinstall: mulai instalasi otomatis ---
+echo  [STATUS] Memulai proses instalasi otomatis untuk perangkat ini...
+echo.
+echo  Pilih mode instalasi:
+echo    [1] Install Lengkap (Otomatis: Dependensi + Shortcut Desktop)
+echo    [2] Keluar / Batalkan
+echo.
+set /p INSTALL_MODE="  Masukkan pilihan (1/2) [Default 1]: "
+if "!INSTALL_MODE!"=="" set INSTALL_MODE=1
+if "!INSTALL_MODE!"=="1" goto MULAI_SETUP
+if "!INSTALL_MODE!"=="2" goto KELUAR_CEPAT
+goto MULAI_SETUP
 
 :BUAT_SHORTCUT_SAJA
 echo.
@@ -71,7 +58,7 @@ echo  --------------------------------------------------------
 if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
     if %ERRORLEVEL% EQU 0 (
-        echo  [OK] Shortcut tunggal "CCTV AI" berhasil dibuat di Desktop Anda!
+        echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda!
     ) else (
         echo  [PERINGATAN] Gagal membuat shortcut via PowerShell.
     )
@@ -79,9 +66,9 @@ if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
     echo  [ERROR] File scripts\create_desktop_shortcut.ps1 tidak ditemukan!
 )
 echo.
-echo  Tekan tombol apa saja untuk kembali ke menu...
-pause >nul
-goto CEK_STATUS
+echo  Menutup jendela dalam 3 detik...
+timeout /t 3 >nul
+exit /b 0
 
 :KONFIRMASI_SETUP_ULANG
 echo.
@@ -97,22 +84,13 @@ goto CEK_STATUS
 :MULAI_SETUP
 echo.
 echo  ========================================================
-echo  [INFO] MEMULAI PROSES INSTALASI OTOMATIS
+echo  [PROSES] MEMULAI INSTALASI OTOMATIS
 echo  ========================================================
-if "!INSTALL_MODE!"=="1" (
-    echo  Mode Terpilih: [1] Install Lengkap (Shortcut Dibuat Otomatis)
-) else (
-    echo  Mode Terpilih: [2] Install Cepat (Minimal)
-)
+echo  Harap tunggu, sistem sedang memasang seluruh kebutuhan AI...
 echo.
-echo  Tekan tombol apa saja untuk memulai instalasi...
-pause >nul
 
 :: --- LANGKAH 1: Cek Python ---
-echo.
-echo  --------------------------------------------------------
-echo  [Langkah 1/5] Memeriksa Instalasi Python...
-echo  --------------------------------------------------------
+echo  [1/5] Memeriksa Instalasi Python...
 python --version 2>nul
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -120,156 +98,101 @@ if %ERRORLEVEL% NEQ 0 (
     echo.
     echo  Silakan download dan install Python 3.11+ dari:
     echo  https://www.python.org/downloads/
-    echo.
     echo  PENTING: Centang kotak "Add Python to PATH" saat instalasi.
     goto GAGAL
 )
-python -c "import sys; print(f'Versi Python terdeteksi: {sys.version.split()[0]}')"
+python -c "import sys; print(f'      Versi Python: {sys.version.split()[0]}')"
 python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo  [PERINGATAN] Versi Python di bawah 3.10. Disarankan Python 3.11 atau lebih baru.
+    echo  [PERINGATAN] Versi Python di bawah 3.10. Disarankan Python 3.11+.
 ) else (
-    echo  [OK] Versi Python memenuhi syarat.
+    echo  [OK] Python valid.
 )
+echo.
 
 :: --- LANGKAH 2: Update pip ---
+echo  [2/5] Memeriksa & Memperbarui pip...
+python -m pip install --upgrade pip --quiet
+echo  [OK] pip siap digunakan.
 echo.
-echo  --------------------------------------------------------
-echo  [Langkah 2/5] Memeriksa & Memperbarui pip...
-echo  --------------------------------------------------------
-python -m pip install --upgrade pip
-if %ERRORLEVEL% NEQ 0 (
-    echo  [PERINGATAN] Pembaruan pip gagal atau dibatasi. Melanjutkan dengan pip yang ada.
-) else (
-    echo  [OK] pip siap digunakan.
-)
 
 :: --- LANGKAH 3: Install Dependensi ---
-echo.
-echo  --------------------------------------------------------
-echo  [Langkah 3/5] Menginstall Dependensi (requirements.txt)...
-echo  --------------------------------------------------------
-echo  Mengunduh dan memasang library AI (OpenCV, YOLO, PyTorch, FastAPI, dll).
-echo  Proses ini memerlukan koneksi internet aktif.
-echo  Harap jangan menutup jendela ini hingga instalasi selesai...
-echo.
+echo  [3/5] Menginstall Dependensi AI (requirements.txt)...
+echo        Mengunduh library (OpenCV, YOLO, PyTorch, FastAPI)...
 python -m pip install -r "%~dp0requirements.txt"
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo  [ERROR] Instalasi dependensi requirements.txt gagal!
-    echo  Pastikan koneksi internet terhubung dan coba ulangi kembali.
+    echo  Pastikan koneksi internet terhubung lalu coba kembali.
     goto GAGAL
 )
+echo  [OK] Semua dependensi Python berhasil diinstall.
 echo.
-echo  [OK] Seluruh dependensi Python berhasil diinstall!
 
-:: --- Pengecekan Dashboard Web ---
+:: --- Pengecekan Dashboard Web Frontend ---
 if not exist "%~dp0dashboard\dist\index.html" (
-    echo.
-    echo  [PERINGATAN] File dashboard web belum ter-build di dashboard\dist!
+    echo  [PERINGATAN] File dashboard web belum ter-build!
     where npm >nul 2>&1
     if %ERRORLEVEL% EQU 0 (
-        echo  Mencoba membangun komponen dashboard otomatis via npm...
+        echo  Membangun komponen dashboard via npm...
         pushd "%~dp0dashboard"
         call npm run build
         popd
-        if exist "%~dp0dashboard\dist\index.html" (
-            echo  [OK] Dashboard web berhasil dibangun!
-        )
     )
 ) else (
-    echo  [OK] Komponen tampilan Dashboard Web ditemukan dan siap digunakan.
+    echo  [OK] Komponen Dashboard Web siap.
 )
+echo.
 
 :: --- LANGKAH 4: Konfigurasi .env ---
-echo.
-echo  --------------------------------------------------------
-echo  [Langkah 4/5] Konfigurasi Pengaturan (.env)...
-echo  --------------------------------------------------------
-if "!INSTALL_MODE!"=="2" (
-    echo  [INFO] Mode Cepat aktif: Konfigurasi dilewati.
-    goto LANGKAH_SHORTCUT
+echo  [4/5] Menyiapkan Konfigurasi (.env)...
+if not exist "%~dp0.env" (
+    set ENVFILE=%~dp0.env
+    echo # CCTV AI Detection --- Konfigurasi otomatis> "!ENVFILE!"
+    echo TELEGRAM_BOT_TOKEN=>> "!ENVFILE!"
+    echo TELEGRAM_CHAT_ID=>> "!ENVFILE!"
+    echo.>> "!ENVFILE!"
+    echo # Cloudflare Quick Tunnel (kosongkan = otomatis gratis)>> "!ENVFILE!"
+    echo # CLOUDFLARE_TUNNEL_TOKEN=>> "!ENVFILE!"
+    echo.>> "!ENVFILE!"
+    echo # PIN Dashboard Mobile (kosongkan = tanpa PIN)>> "!ENVFILE!"
+    echo # DASHBOARD_PIN=>> "!ENVFILE!"
+    echo  [OK] File .env dasar berhasil dibuat.
+) else (
+    echo  [OK] File .env sudah ada (dipertahankan).
 )
-
-if exist "%~dp0.env" (
-    echo  [OK] File .env sudah ada (konfigurasi yang ada dipertahankan).
-    goto LANGKAH_SHORTCUT
-)
-
-echo  Mengatur konfigurasi awal Telegram Notifier:
-echo  (Tekan Enter jika ingin melewati dan mengisi nanti di file .env)
 echo.
-set /p BOT_TOKEN="  1. Masukkan Telegram Bot Token (opsional): "
-set /p CHAT_ID="  2. Masukkan Telegram Chat ID   (opsional): "
 
-set ENVFILE=%~dp0.env
-echo # CCTV AI Detection --- Konfigurasi otomatis> "!ENVFILE!"
-echo TELEGRAM_BOT_TOKEN=!BOT_TOKEN!>> "!ENVFILE!"
-echo TELEGRAM_CHAT_ID=!CHAT_ID!>> "!ENVFILE!"
-echo.>> "!ENVFILE!"
-echo # Cloudflare Quick Tunnel (kosongkan = otomatis gratis)>> "!ENVFILE!"
-echo # CLOUDFLARE_TUNNEL_TOKEN=>> "!ENVFILE!"
-echo.>> "!ENVFILE!"
-echo # PIN Dashboard Mobile (kosongkan = tanpa PIN)>> "!ENVFILE!"
-echo # DASHBOARD_PIN=>> "!ENVFILE!"
-
-echo.
-echo  [OK] File konfigurasi .env berhasil dibuat!
-
-:: --- LANGKAH 5: Shortcut Desktop (Otomatis & Tunggal) ---
-:LANGKAH_SHORTCUT
-echo.
-echo  --------------------------------------------------------
-echo  [Langkah 5/5] Membuat Shortcut Desktop Otomatis...
-echo  --------------------------------------------------------
-if "!INSTALL_MODE!"=="2" (
-    echo  [INFO] Mode Cepat aktif: Pembuatan shortcut dilewati.
-    goto SELESAI_SETUP
-)
-
-echo  Membuat shortcut tunggal 'CCTV AI' di Desktop...
+:: --- LANGKAH 5: Shortcut Desktop Otomatis ---
+echo  [5/5] Membuat Shortcut "CCTV AI" di Desktop...
 if exist "%~dp0scripts\create_desktop_shortcut.ps1" (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create_desktop_shortcut.ps1"
     if %ERRORLEVEL% EQU 0 (
-        echo  [OK] Shortcut tunggal "CCTV AI" berhasil dibuat di Desktop Anda!
+        echo  [OK] Shortcut "CCTV AI" berhasil dibuat di Desktop Anda!
     ) else (
-        echo  [INFO] Pembuatan shortcut otomatis dilewati / tidak didukung.
+        echo  [INFO] Pembuatan shortcut otomatis dilewati.
     )
 ) else (
-    echo  [INFO] Script shortcut tidak ditemukan, dilewati.
+    echo  [INFO] Script shortcut tidak ditemukan.
 )
+echo.
 
-:: --- SELESAI SETUP DENGAN OPSI KELUAR / JALANKAN ---
+:: --- SELESAI SETUP & KELUAR OTOMATIS ---
 :SELESAI_SETUP
 echo setup_done > "%~dp0.setup_done"
-echo.
 echo  ========================================================
-echo  [STATUS] INSTALASI OTOMATIS BERHASIL!
+echo  [STATUS] INSTALASI BERHASIL!
 echo  ========================================================
 echo  Semua dependensi dan komponen telah siap digunakan.
-echo  Shortcut 'CCTV AI' telah dibuat di Desktop Anda.
 echo.
-echo  Pilih langkah selanjutnya:
-echo    [1] Langsung Jalankan CCTV AI Sekarang (Buka Dashboard)
-echo    [2] Selesai ^& Keluar (Jalankan nanti via Shortcut Desktop)
+echo  >> UNTUK MENGAKTIFKAN CCTV AI:
+echo     Buka shortcut "CCTV AI" di Desktop Anda!
 echo.
-:PILIH_SELESAI
-set /p PILIH_AKHIR="  Masukkan pilihan (1/2) [Default 1]: "
-if "!PILIH_AKHIR!"=="" set PILIH_AKHIR=1
-if "!PILIH_AKHIR!"=="1" goto JALANKAN_SISTEM
-if "!PILIH_AKHIR!"=="2" goto SELESAI_KELUAR
-echo  [!] Pilihan tidak valid. Ketik 1 atau 2.
-goto PILIH_SELESAI
+echo  Jendela ini akan menutup otomatis dalam 3 detik...
+timeout /t 3 >nul
+exit /b 0
 
-:SELESAI_KELUAR
-echo.
-echo  ========================================================
-echo  [INFO] Instalasi selesai. Anda dapat menjalankan CCTV AI
-echo  kapan saja melalui shortcut 'CCTV AI' di Desktop atau setup.bat.
-echo  ========================================================
-goto KELUAR
-
-:: --- RUN PROGRAM ---
+:: --- RUN PROGRAM JIKA DIMINTA VIA MENU ---
 :JALANKAN_SISTEM
 cls
 echo.
@@ -289,19 +212,19 @@ echo.
 echo  ========================================================
 echo  [INFO] Sistem CCTV AI Detection telah dihentikan.
 echo  ========================================================
-goto KELUAR
+timeout /t 3 >nul
+exit /b 0
 
 :GAGAL
 echo.
 echo  ========================================================
 echo  [ERROR] Terjadi kesalahan dalam proses instalasi!
-echo  Jendela ini TIDAK akan tertutup otomatis.
 echo  Silakan periksa pesan error di atas.
 echo  ========================================================
-goto KELUAR
-
-:KELUAR
 echo.
 echo  Tekan tombol apa saja untuk menutup jendela ini...
 pause >nul
+exit /b 1
+
+:KELUAR_CEPAT
 exit /b 0
