@@ -12,7 +12,7 @@ Design decisions: ADR-007
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import supervision as sv
@@ -60,8 +60,8 @@ class RiderInfo:
     @property
     def emoji_label(self) -> str:
         if self.vehicle_class == MOTORCYCLE_CLASS_ID:
-            return "\U0001f3cd\ufe0f Rider!"   # 🏍️ Rider!
-        return "\U0001f697 Driver!"             # 🚗 Driver!
+            return "Rider!"
+        return "Driver!"
 
 
 @dataclass
@@ -193,7 +193,8 @@ class VehicleDetector:
         Find person↔vehicle pairs where the person is riding the vehicle.
 
         A person is considered a rider if their bounding box overlaps the
-        vehicle bounding box with IoU >= iou_threshold.
+        vehicle bounding box with IoU >= iou_threshold, or IoP (intersection
+        over person) >= 0.25 for motorcycles.
 
         Args:
             persons:  sv.Detections of persons from PersonDetector.
@@ -216,20 +217,27 @@ class VehicleDetector:
 
         for p_idx, p_box in enumerate(p_boxes):
             for v_idx, v_box in enumerate(v_boxes):
-                iou = VehicleDetector._compute_iou(p_box, v_box)
+                v_cls = int(v_classes[v_idx])
+                iou, iop = VehicleDetector._compute_overlap_metrics(p_box, v_box)
+                is_rider = False
                 if iou >= iou_threshold:
+                    is_rider = True
+                elif v_cls == MOTORCYCLE_CLASS_ID and iop >= 0.25:
+                    is_rider = True
+
+                if is_rider:
                     riders.append(RiderInfo(
                         person_idx=p_idx,
                         vehicle_idx=v_idx,
-                        vehicle_class=int(v_classes[v_idx]),
+                        vehicle_class=v_cls,
                         iou=float(iou),
                     ))
 
         return riders
 
     @staticmethod
-    def _compute_iou(box_a: np.ndarray, box_b: np.ndarray) -> float:
-        """Compute Intersection over Union of two [x1, y1, x2, y2] boxes."""
+    def _compute_overlap_metrics(box_a: np.ndarray, box_b: np.ndarray) -> Tuple[float, float]:
+        """Compute IoU and IoP (intersection over box_a)."""
         x_a = max(box_a[0], box_b[0])
         y_a = max(box_a[1], box_b[1])
         x_b = min(box_a[2], box_b[2])
@@ -240,16 +248,21 @@ class VehicleDetector:
         inter_area = inter_w * inter_h
 
         if inter_area == 0.0:
-            return 0.0
+            return 0.0, 0.0
 
         area_a = max(0.0, (box_a[2] - box_a[0]) * (box_a[3] - box_a[1]))
         area_b = max(0.0, (box_b[2] - box_b[0]) * (box_b[3] - box_b[1]))
         union_area = area_a + area_b - inter_area
 
-        if union_area <= 0.0:
-            return 0.0
+        iou = (inter_area / union_area) if union_area > 0.0 else 0.0
+        iop = (inter_area / area_a) if area_a > 0.0 else 0.0
+        return iou, iop
 
-        return inter_area / union_area
+    @staticmethod
+    def _compute_iou(box_a: np.ndarray, box_b: np.ndarray) -> float:
+        """Compute Intersection over Union of two [x1, y1, x2, y2] boxes."""
+        iou, _ = VehicleDetector._compute_overlap_metrics(box_a, box_b)
+        return iou
 
     # ------------------------------------------------------------------
     # Convenience

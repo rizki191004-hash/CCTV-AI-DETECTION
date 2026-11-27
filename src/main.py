@@ -89,6 +89,7 @@ class CameraPipeline:
     """
     latest_vehicle_detections = None
     latest_riders = []
+    latest_vehicle_tracks = None
 
     def __init__(
         self,
@@ -178,6 +179,10 @@ class CameraPipeline:
         self.latest_track_scores = {}
         self.latest_vehicle_detections = None
         self.latest_riders = []
+        self.latest_vehicle_tracks = None
+
+        from src.vehicle_tracker import VehicleTracker
+        self.vehicle_tracker = VehicleTracker(camera_id=self.camera_id)
 
     async def run(self, shutdown_event: asyncio.Event) -> None:
         """Main processing loop for this camera."""
@@ -306,9 +311,14 @@ class CameraPipeline:
                             detection_result.persons,
                             vehicle_result.vehicles,
                         )
+                        if hasattr(self, "vehicle_tracker") and self.vehicle_tracker is not None:
+                            self.latest_vehicle_tracks = self.vehicle_tracker.update(vehicle_result.vehicles)
+                        else:
+                            self.latest_vehicle_tracks = None
                     else:
                         self.latest_vehicle_detections = None
                         self.latest_riders = []
+                        self.latest_vehicle_tracks = None
 
                     # --- 6. Tracking ---
                     if len(all_detections) > 0:
@@ -330,6 +340,10 @@ class CameraPipeline:
                     tracked = self.tracker.update(sv.Detections.empty())
                     self.latest_vehicle_detections = None
                     self.latest_riders = []
+                    if hasattr(self, "vehicle_tracker") and self.vehicle_tracker is not None:
+                        self.latest_vehicle_tracks = self.vehicle_tracker.update(sv.Detections.empty())
+                    else:
+                        self.latest_vehicle_tracks = None
 
                 # --- 7. Anti-False Alarm Gate ---
                 # Filter tracks through multi-stage validation pipeline
@@ -437,7 +451,8 @@ class CameraPipeline:
                         vehicle_detections=veh_detections,
                         riders=riders,
                         vehicle_count=vehicle_count,
-                        only_riders=True,
+                        only_riders=False,
+                        vehicle_track_result=self.latest_vehicle_tracks,
                     )
 
                     self.snapshot_scheduler.update_best_frame(
@@ -523,9 +538,56 @@ class CameraPipeline:
                         by2 * scale_y
                     ])
 
-        # Capture cropped human snapshot specifically for Telegram (must be before capture_snapshot clears buffer)
+        # Collect vehicle bounding boxes for vehicle-focused crop
+        vehicle_bboxes = []
+        is_vehicle_event = False
+        veh_tracks = getattr(self, "latest_vehicle_tracks", None)
+        veh_detections = getattr(self, "latest_vehicle_detections", None)
+        riders = getattr(self, "latest_riders", None)
+
+        if veh_tracks and veh_tracks.any_moving and veh_detections is not None and len(veh_detections) > 0:
+            is_vehicle_event = True
+            tracked_vehicles = veh_tracks.tracked_vehicles
+            for v_idx, v_box in enumerate(veh_detections.xyxy):
+                is_mov = False
+                if tracked_vehicles is not None and hasattr(tracked_vehicles, "tracker_id") and tracked_vehicles.tracker_id is not None and v_idx < len(tracked_vehicles.tracker_id):
+                    tid = tracked_vehicles.tracker_id[v_idx]
+                    if tid is not None and veh_tracks.vehicle_moving.get(int(tid), False):
+                        is_mov = True
+                elif veh_tracks.any_moving:
+                    is_mov = True
+
+                if is_mov:
+                    vx1, vy1, vx2, vy2 = v_box
+                    vehicle_bboxes.append([
+                        vx1 * scale_x,
+                        vy1 * scale_y,
+                        vx2 * scale_x,
+                        vy2 * scale_y,
+                    ])
+        elif riders and veh_detections is not None and len(veh_detections) > 0:
+            is_vehicle_event = True
+            for r in riders:
+                if r.vehicle_idx < len(veh_detections.xyxy):
+                    v_box = veh_detections.xyxy[r.vehicle_idx]
+                    vehicle_bboxes.append([
+                        v_box[0] * scale_x,
+                        v_box[1] * scale_y,
+                        v_box[2] * scale_x,
+                        v_box[3] * scale_y,
+                    ])
+
+        # Capture cropped snapshot specifically for Telegram (must be before capture_snapshot clears buffer)
         crop_snapshot_path = None
-        if human_bboxes and hasattr(self.snapshot_scheduler, "capture_human_crop"):
+        if is_vehicle_event and vehicle_bboxes and hasattr(self.snapshot_scheduler, "capture_vehicle_crop"):
+            crop_snapshot_path = self.snapshot_scheduler.capture_vehicle_crop(
+                camera_id=cam_id,
+                event_id=event.event_id,
+                vehicle_bboxes=vehicle_bboxes,
+                frame_override=None,
+                padding=0.18,
+            )
+        elif human_bboxes and hasattr(self.snapshot_scheduler, "capture_human_crop"):
             crop_snapshot_path = self.snapshot_scheduler.capture_human_crop(
                 camera_id=cam_id,
                 event_id=event.event_id,
@@ -545,9 +607,10 @@ class CameraPipeline:
         telegram_snapshot = crop_snapshot_path or snapshot_path
 
         vehicle_info = None
-        riders = getattr(self, "latest_riders", None)
         if riders:
             vehicle_info = VehicleDetector.describe_riders(riders)
+        elif veh_tracks and veh_tracks.any_moving:
+            vehicle_info = "Moving Vehicle"
 
         # Send Telegram alert (using cropped human image when available)
         await self.telegram.send_alert(

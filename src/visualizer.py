@@ -105,9 +105,9 @@ class Visualizer:
                 iou = Visualizer._compute_iou(track_bbox, v_box)
                 if iou > 0.1:
                     if rider.vehicle_class == MOTORCYCLE_CLASS_ID:
-                        return "🏍️ Naik Motor", (0, 180, 120)   # green-teal
+                        return "Naik Motor", (0, 180, 120)   # green-teal
                     else:
-                        return "🚗 Mengemudi", (255, 140, 0)     # orange
+                        return "Mengemudi", (255, 140, 0)     # orange
 
         # Check skeletal keypoints first
         if getattr(track, 'latest_keypoints', None) is not None:
@@ -186,7 +186,8 @@ class Visualizer:
         vehicle_detections: Any = None,
         riders: Any = None,
         vehicle_count: int = 0,
-        only_riders: bool = True,
+        only_riders: bool = False,
+        vehicle_track_result: Any = None,
     ) -> np.ndarray:
         """Draw bounding boxes, labels, and HUD on the frame.
         
@@ -302,7 +303,11 @@ class Visualizer:
             rider_vehicle_idxs = set()
             if riders:
                 rider_vehicle_idxs = {r.vehicle_idx for r in riders}
-            
+
+            tracked_vehicles = getattr(vehicle_track_result, "tracked_vehicles", None)
+            v_movings = getattr(vehicle_track_result, "vehicle_moving", {}) or {}
+            v_speeds_kmh = getattr(vehicle_track_result, "vehicle_speed_kmh", {}) or {}
+
             for v_idx, v_box in enumerate(vehicle_detections.xyxy):
                 is_rider = v_idx in rider_vehicle_idxs
                 if only_riders and not is_rider:
@@ -312,16 +317,55 @@ class Visualizer:
                 vx1, vy1, vx2, vy2 = v_box
                 vx1, vx2 = int(vx1 * scale_x), int(vx2 * scale_x)
                 vy1, vy2 = int(vy1 * scale_y), int(vy2 * scale_y)
-                
-                if is_rider:
-                    color = _VEHICLE_COLOR_RIDER
-                    label = '\U0001f3cd\ufe0f Rider!' if v_cls == MOTORCYCLE_CLASS_ID else '\U0001f697 Driver!'
-                    thickness = 4
+
+                # Find vehicle track ID
+                v_tid = None
+                if tracked_vehicles is not None and hasattr(tracked_vehicles, "tracker_id") and tracked_vehicles.tracker_id is not None and len(tracked_vehicles) > 0:
+                    if v_idx < len(tracked_vehicles.tracker_id) and tracked_vehicles.tracker_id[v_idx] is not None:
+                        v_tid = int(tracked_vehicles.tracker_id[v_idx])
+                    else:
+                        best_iou = 0.0
+                        for t_idx, t_box in enumerate(tracked_vehicles.xyxy):
+                            iou = Visualizer._compute_iou(v_box, t_box)
+                            if iou > best_iou:
+                                best_iou = iou
+                                if tracked_vehicles.tracker_id[t_idx] is not None:
+                                    v_tid = int(tracked_vehicles.tracker_id[t_idx])
+
+                is_moving = False
+                speed_kmh = 0.0
+                if v_tid is not None:
+                    is_moving = v_movings.get(v_tid, False)
+                    speed_kmh = v_speeds_kmh.get(v_tid, 0.0)
+                elif len(v_movings) == 1:
+                    single_id = next(iter(v_movings.keys()))
+                    is_moving = v_movings.get(single_id, False)
+                    speed_kmh = v_speeds_kmh.get(single_id, 0.0)
+                    v_tid = single_id
+
+                id_str = f" #V{v_tid}" if v_tid is not None else ""
+                status_str = f"Berjalan | {speed_kmh:.0f} km/j" if is_moving else "Berhenti"
+
+                if v_cls == MOTORCYCLE_CLASS_ID:
+                    if is_rider:
+                        color = _VEHICLE_COLOR_RIDER
+                        thickness = 4
+                        label = f"Motor{id_str} | Naik Motor: {status_str}" if vehicle_track_result else f"Motor{id_str} | Naik Motor"
+                    else:
+                        color = _VEHICLE_COLOR_DEFAULT.get(v_cls, (0, 165, 255))
+                        thickness = 2
+                        label = f"Motor{id_str} | {status_str}" if vehicle_track_result else f"Motor{id_str}"
                 else:
-                    color = _VEHICLE_COLOR_DEFAULT.get(v_cls, (0, 200, 200))
-                    label = 'Motorcycle' if v_cls == MOTORCYCLE_CLASS_ID else 'Car'
-                    thickness = 2
-                
+                    # Car -> displayed cleanly as "Kendaraan"
+                    if is_moving:
+                        color = (255, 140, 0)
+                        thickness = 3
+                        label = f"Kendaraan{id_str} | {status_str}"
+                    else:
+                        color = (180, 100, 50)
+                        thickness = 2
+                        label = f"Kendaraan{id_str} | Berhenti" if vehicle_track_result else f"Kendaraan{id_str}"
+
                 cv2.rectangle(display_frame, (vx1, vy1), (vx2, vy2), color, thickness)
                 lw, lh = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
                 cv2.rectangle(display_frame, (vx1, vy1 - 26), (vx1 + lw + 6, vy1), color, -1)

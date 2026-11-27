@@ -161,6 +161,8 @@ async def mjpeg_generator(app: CCTVApplication, camera_id: str):
                     vehicle_detections=veh_detections,
                     riders=riders,
                     vehicle_count=vehicle_count,
+                    only_riders=False,
+                    vehicle_track_result=getattr(pipeline, "latest_vehicle_tracks", None),
                 )
 
                 # Encode frame to JPEG (75% quality for ultra-low latency & bandwidth savings)
