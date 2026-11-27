@@ -67,20 +67,16 @@ CCTV AI DETECTION/
 
 ## 🚀 Langkah Setup di Perangkat Baru
 
-1. **Install Python 3.11+** dari [python.org](https://www.python.org/downloads/)
-   - ⚠️ Centang **"Add Python to PATH"** saat instalasi!
+1. **Extract ZIP** ke folder mana saja (misal: `D:\CCTV AI DETECTION\`)
 
-2. **Extract ZIP** ke folder mana saja (misal: `D:\CCTV AI DETECTION\`)
-
-3. **Jalankan Installer:**
-   - **Windows**: Double-click `setup.bat`
+2. **Jalankan Installer:**
+   - **Windows**: Double-click `setup.bat` (Python 3.11 akan otomatis diunduh & diinstall jika belum ada!)
    - **Linux/macOS**: Buka terminal, ketik `bash setup.sh`
    - **Universal**: Buka terminal/cmd, ketik `python launch.py`
 
-4. **Sistem otomatis mendeteksi status:**
-   - Jika baru pertama kali: Panduan instalasi otomatis berjalan, mendownload library AI, mengisi token Telegram (opsional), dan membuat shortcut Desktop.
-   - Jika sudah pernah diinstall: Langsung memilih `[1]` untuk menjalankan CCTV AI.
-   - Selesai setup, aplikasi otomatis langsung berjalan dan membuka dashboard di browser (`http://localhost:8000`).
+3. **Sistem otomatis mendeteksi status:**
+   - Jika baru pertama kali: Panduan instalasi otomatis berjalan, menyiapkan Python 3.11, mendownload library AI, dan membuat shortcut Desktop "CCTV AI".
+   - Selesai setup, aplikasi langsung siap dijalankan melalui shortcut Desktop atau dashboard browser (`http://localhost:8000`).
 
 ---
 

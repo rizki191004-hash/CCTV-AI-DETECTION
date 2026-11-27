@@ -85,3 +85,22 @@ def test_model_files_exist():
     for model in ["yolov8n.pt", "yolov8n-pose.pt"]:
         path = os.path.join(PROJECT_ROOT, model)
         assert os.path.isfile(path), f"Model {model} tidak ditemukan — wajib ikut dalam distribusi zip"
+
+
+def test_setup_bat_auto_installs_python_when_missing():
+    """setup.bat harus memiliki kemampuan mengunduh/memasang Python otomatis jika belum ada."""
+    path = os.path.join(PROJECT_ROOT, "setup.bat")
+    content = open(path, encoding="utf-8").read().lower()
+    assert "powershell" in content and ("python-3.11" in content or "winget" in content), (
+        "setup.bat harus memiliki mekanisme otomatis untuk mengunduh/memasang Python 3.11"
+    )
+
+
+def test_setup_bat_refreshes_path_for_installed_python():
+    """setup.bat harus me-refresh PATH atau mendeteksi folder instalasi Python pengguna."""
+    path = os.path.join(PROJECT_ROOT, "setup.bat")
+    content = open(path, encoding="utf-8").read()
+    assert "localappdata" in content.lower() or "programs\\python" in content.lower(), (
+        "setup.bat harus mendeteksi folder instalasi Python di LocalAppData"
+    )
+

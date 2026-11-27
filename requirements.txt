@@ -1,5 +1,5 @@
 ultralytics>=8.2.0
-supervision>=0.21.0
+supervision>=0.21.0,<0.25.0
 opencv-python-headless>=4.9.0
 python-telegram-bot>=21.0
 aiosqlite>=0.20.0

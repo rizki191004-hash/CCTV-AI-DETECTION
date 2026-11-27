@@ -52,24 +52,78 @@ echo  ========================================================
 echo  Harap tunggu, proses ini menyiapkan seluruh kebutuhan AI...
 echo.
 
-:: --- LANGKAH 1: Cek Python ---
+:: --- LANGKAH 1: Cek & Pasang Python Otomatis ---
 echo  [1/5] Memeriksa Instalasi Python...
-python --version 2>nul
+
+:: Cek path instalasi standar di LocalAppData atau Program Files terlebih dahulu
+if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+    set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;!PATH!"
+) else if exist "%ProgramFiles%\Python311\python.exe" (
+    set "PATH=%ProgramFiles%\Python311;%ProgramFiles%\Python311\Scripts;!PATH!"
+) else if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+    set "PATH=%LOCALAPPDATA%\Programs\Python\Python312;%LOCALAPPDATA%\Programs\Python\Python312\Scripts;!PATH!"
+)
+
+:: Periksa apakah Python sudah bisa dieksekusi dan memenuhi versi >= 3.10
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo  [ERROR] Python tidak ditemukan di PATH sistem Anda!
+    echo  [INFO] Python belum terpasang atau tidak memenuhi syarat (dibutuhkan Python 3.11+).
+    echo  [PROSES] Memulai instalasi otomatis Python 3.11 untuk perangkat ini...
+    echo         Harap tunggu, proses unduh dan instalasi berjalan otomatis di latar belakang...
     echo.
-    echo  Silakan download dan install Python 3.11+ dari:
-    echo  https://www.python.org/downloads/
-    echo  PENTING: Centang kotak "Add Python to PATH" saat instalasi.
-    goto GAGAL
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+        "$installer = Join-Path $env:TEMP 'python-3.11.9-amd64.exe';" ^
+        "if (-not (Test-Path $installer)) {" ^
+        "    Write-Host '  --> Mengunduh installer resmi Python 3.11.9 dari python.org...';" ^
+        "    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+        "    try {" ^
+        "        Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe' -OutFile $installer -UseBasicParsing;" ^
+        "    } catch {" ^
+        "        Write-Host '  [ERROR] Gagal mengunduh installer Python: ' $_.Exception.Message;" ^
+        "        exit 1;" ^
+        "    }" ^
+        "};" ^
+        "Write-Host '  --> Memasang Python 3.11.9 secara otomatis...';" ^
+        "$proc = Start-Process -FilePath $installer -ArgumentList '/quiet InstallAllUsers=0 Include_launcher=0 PrependPath=1' -Wait -PassThru;" ^
+        "exit $proc.ExitCode"
+
+    if %ERRORLEVEL% NEQ 0 (
+        echo.
+        echo  [PERINGATAN] Instalasi via installer langsung gagal. Mencoba alternatif via winget...
+        winget install --id Python.Python.3.11 --exact --source winget --accept-package-agreements --accept-source-agreements --silent >nul 2>&1
+    )
+
+    :: Refresh PATH lingkungan pengguna agar Python yang baru dipasang langsung terbaca
+    if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+        set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;!PATH!"
+    )
+    for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do (
+        set "USER_PATH=%%b"
+        if defined USER_PATH set "PATH=!USER_PATH!;!PATH!"
+    )
+
+    :: Cek ulang setelah proses instalasi otomatis
+    python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+    if %ERRORLEVEL% NEQ 0 (
+        echo.
+        echo  [ERROR] Python gagal dipasang secara otomatis!
+        echo.
+        echo  Silakan download dan install Python 3.11+ secara manual dari:
+        echo  https://www.python.org/downloads/
+        echo  PENTING: Centang kotak "Add Python to PATH" saat instalasi.
+        goto GAGAL
+    )
+    echo  [OK] Python 3.11 berhasil dipasang dan dikonfigurasi otomatis.
 )
+
 python -c "import sys; print(f'      Versi Python: {sys.version.split()[0]}')"
 python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo  [PERINGATAN] Versi Python di bawah 3.10. Disarankan Python 3.11+.
 ) else (
-    echo  [OK] Python valid.
+    echo  [OK] Python valid dan siap digunakan.
 )
 echo.
 

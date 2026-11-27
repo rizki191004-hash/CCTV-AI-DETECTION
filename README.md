@@ -84,9 +84,8 @@ Tabel yang tersedia:
 Ingin menjalankan aplikasi di PC lain? Ikuti langkah berikut:
 
 1. **Zip seluruh folder project** (lihat [DISTRIBUSI.md](DISTRIBUSI.md) untuk daftar file yang wajib ikut, termasuk model `.pt`)
-2. **Di perangkat penerima:** Install [Python 3.11+](https://www.python.org/downloads/) — centang **"Add Python to PATH"**
-3. **Extract ZIP** lalu **double-click `setup.bat`** — otomatis install semua dependensi & isi konfigurasi Telegram
-4. Jalankan via shortcut Desktop atau `run.py`
+2. **Di perangkat penerima:** Extract ZIP lalu **double-click `setup.bat`** — otomatis mengunduh Python 3.11 (jika belum ada), memasang semua dependensi AI, dan membuat shortcut Desktop "CCTV AI"
+3. Jalankan via shortcut Desktop atau `run.py`
 
 > Lihat [DISTRIBUSI.md](DISTRIBUSI.md) untuk panduan lengkap & troubleshooting.
 

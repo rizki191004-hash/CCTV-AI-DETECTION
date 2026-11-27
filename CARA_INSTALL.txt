@@ -4,14 +4,11 @@
 
 PRASYARAT (Lakukan SEKALI di perangkat baru):
 --------------------------------------------
-1. Install Python 3.11 atau lebih baru dari:
-   https://www.python.org/downloads/
-
-   ⚠️ PENTING: Saat instalasi Python, WAJIB CENTANG KOTAK:
-   [v] "Add Python to PATH" (atau "Add python.exe to PATH")
-   Jika tidak dicentang, Python tidak akan terbaca di Command Prompt!
-
-2. Pastikan koneksi internet aktif untuk download dependensi AI.
+1. Pastikan koneksi internet aktif untuk proses instalasi otomatis pertama kali.
+2. (OTOMATIS) Python 3.11 akan diunduh dan dipasang secara OTOMATIS oleh setup.bat
+   jika belum ada di komputer Anda! Tidak perlu mengunduh Python secara manual.
+   (Namun jika ingin menginstal manual, silakan unduh Python 3.11+ dari python.org
+   dan pastikan centang kotak "Add Python to PATH").
 
 
 ================================================================
@@ -31,8 +28,9 @@ LANGKAH INSTALASI OTOMATIS & RUN (WINDOWS):
 
    - CARA INSTALL OTOMATIS:
      Pilih [1] lalu tekan Enter (atau langsung tekan Enter).
-     Sistem akan otomatis memasang semua library AI (OpenCV, PyTorch,
-     YOLOv8, FastAPI) dan membuat 1 shortcut "CCTV AI" di Desktop Anda.
+     Sistem akan otomatis mendeteksi ketersediaan Python (mengunduh & memasang
+     Python 3.11 resmi jika belum ada), memasang semua library AI (OpenCV, PyTorch,
+     YOLOv8, FastAPI), serta membuat 1 shortcut "CCTV AI" di Desktop Anda.
      Setelah selesai, jendela CMD akan MENUTUP SENDIRI dalam 3 detik!
 
    - CARA MENGAKTIFKAN CCTV AI:
@@ -91,9 +89,11 @@ file .env menggunakan Notepad kapan saja.
 ================================================================
 TROUBLESHOOTING (SOLUSI MASALAH):
 ================================================================
-Masalah: "Python tidak ditemukan di PATH"
-Solusi : Install ulang Python dari python.org dan pastikan centang
-         "Add Python to PATH".
+Masalah: "Python belum terpasang di perangkat ini"
+Solusi : setup.bat akan otomatis mendownload dan menginstall Python 3.11 resmi.
+         Pastikan koneksi internet aktif selama instalasi pertama berjalan.
+         Jika jaringan Anda memblokir unduhan otomatis, unduh manual dari
+         https://www.python.org/downloads/ dan centang "Add Python to PATH".
 
 Masalah: Shortcut Desktop tidak muncul
 Solusi : Double-click setup.bat, lalu pilih opsi [2] "Buat / Perbaiki
