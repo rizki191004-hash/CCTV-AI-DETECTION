@@ -124,3 +124,27 @@ def test_setup_bat_smart_differential_dependency_check():
     )
 
 
+def test_setup_bat_uninstall_cleans_desktop_shortcuts_reliably():
+    """setup.bat harus menghapus shortcut Desktop secara native dan andal tanpa memanggil GetFolderPath('UserProfile')."""
+    path = os.path.join(PROJECT_ROOT, "setup.bat")
+    content = open(path, encoding="utf-8").read()
+    uninstall_block = content[content.find(":PROSES_UNINSTALL"):]
+    assert "GetFolderPath('UserProfile')" not in uninstall_block, (
+        "setup.bat tidak boleh menggunakan [Environment]::GetFolderPath('UserProfile') yang tidak valid di .NET"
+    )
+    assert "userprofile%\\desktop\\cctv ai.lnk" in uninstall_block.lower() or "desktop\\cctv ai.lnk" in uninstall_block.lower(), (
+        "setup.bat harus menghapus shortcut CCTV AI.lnk dari Desktop pengguna"
+    )
+
+
+def test_setup_bat_uninstall_does_not_autoclose():
+    """setup.bat uninstall tidak boleh menggunakan timeout auto-close 3 detik melainkan menunggu tombol pengguna."""
+    path = os.path.join(PROJECT_ROOT, "setup.bat")
+    content = open(path, encoding="utf-8").read()
+    uninstall_block = content[content.find(":PROSES_UNINSTALL"):content.find(":KELUAR")]
+    assert "timeout /t" not in uninstall_block, (
+        "setup.bat tidak boleh auto-close pada proses uninstall"
+    )
+
+
+

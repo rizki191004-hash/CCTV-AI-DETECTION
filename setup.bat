@@ -234,8 +234,23 @@ echo     [OK] Proses latar belakang telah dihentikan.
 
 echo.
 echo  2. Menghapus shortcut "CCTV AI" dari Desktop...
-powershell -Command "$dirs = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'), (Join-Path [Environment]::GetFolderPath('UserProfile') 'Desktop'), (Join-Path [Environment]::GetFolderPath('UserProfile') 'OneDrive\Desktop')); foreach ($d in $dirs) { if ($d) { $lnk = Join-Path $d 'CCTV AI.lnk'; if (Test-Path $lnk) { Remove-Item $lnk -Force -ErrorAction SilentlyContinue } } }" >nul 2>&1
-echo     [OK] Shortcut Desktop telah dibersihkan.
+:: Hapus langsung via CMD di seluruh lokasi Desktop yang mungkin
+if exist "%USERPROFILE%\Desktop\CCTV AI.lnk" del /f /q "%USERPROFILE%\Desktop\CCTV AI.lnk" >nul 2>&1
+if exist "%USERPROFILE%\OneDrive\Desktop\CCTV AI.lnk" del /f /q "%USERPROFILE%\OneDrive\Desktop\CCTV AI.lnk" >nul 2>&1
+if exist "%PUBLIC%\Desktop\CCTV AI.lnk" del /f /q "%PUBLIC%\Desktop\CCTV AI.lnk" >nul 2>&1
+if exist "C:\Users\Public\Desktop\CCTV AI.lnk" del /f /q "C:\Users\Public\Desktop\CCTV AI.lnk" >nul 2>&1
+
+:: Pembersihan menyeluruh via PowerShell untuk desktop custom/redirected
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$dirs = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'), (Join-Path $env:USERPROFILE 'Desktop'), (Join-Path $env:USERPROFILE 'OneDrive\Desktop'), (Join-Path $env:PUBLIC 'Desktop'));" ^
+    "foreach ($d in $dirs) { if ($d -and (Test-Path $d)) { $f = Join-Path $d 'CCTV AI.lnk'; if (Test-Path $f) { Remove-Item -Path $f -Force -ErrorAction SilentlyContinue } } }" >nul 2>&1
+
+:: Verifikasi apakah file shortcut benar-benar sudah hilang
+if exist "%USERPROFILE%\Desktop\CCTV AI.lnk" (
+    echo     [PERINGATAN] Shortcut masih terdeteksi di Desktop.
+) else (
+    echo     [OK] Shortcut Desktop telah berhasil dihapus.
+)
 
 echo.
 echo  3. Membersihkan status setup dan runtime temporary...
@@ -252,8 +267,8 @@ echo  ========================================================
 echo  Shortcut Desktop dan komponen sistem telah dihapus.
 echo  Sistem CCTV AI telah kembali ke kondisi awal yang bersih.
 echo.
-echo  Jendela ini akan menutup otomatis dalam 3 detik...
-timeout /t 3 >nul
+echo  Tekan tombol apa saja untuk menutup jendela ini...
+pause >nul
 exit /b 0
 
 :: ================================================================
