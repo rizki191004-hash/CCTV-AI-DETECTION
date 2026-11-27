@@ -28,10 +28,14 @@ LANGKAH INSTALASI OTOMATIS & RUN (WINDOWS):
 
    - CARA INSTALL OTOMATIS:
      Pilih [1] lalu tekan Enter (atau langsung tekan Enter).
-     Sistem akan otomatis mendeteksi ketersediaan Python (mengunduh & memasang
-     Python 3.11 resmi jika belum ada), memasang semua library AI (OpenCV, PyTorch,
-     YOLOv8, FastAPI), serta membuat 1 shortcut "CCTV AI" di Desktop Anda.
-     Setelah selesai, jendela CMD akan MENUTUP SENDIRI dalam 3 detik!
+     Sistem akan otomatis mendeteksi komponen:
+     * Jika komponen/library sudah terpasang, sistem tidak akan menduplikasi dan
+       melewatinya secara cerdas (hemat waktu).
+     * Jika Python atau pustaka AI belum ada, sistem otomatis mengunduh dan
+       memasang komponen yang kurang saja.
+     * Membuat/memperbarui 1 shortcut "CCTV AI" di Desktop Anda.
+     Setelah proses selesai, seluruh ringkasan progres akan ditampilkan di layar
+     dan jendela menunggu Anda menekan sembarang tombol untuk keluar (tidak menutup sendiri).
 
    - CARA MENGAKTIFKAN CCTV AI:
      Cukup double-click shortcut "CCTV AI" di Desktop Anda!

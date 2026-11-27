@@ -104,3 +104,23 @@ def test_setup_bat_refreshes_path_for_installed_python():
         "setup.bat harus mendeteksi folder instalasi Python di LocalAppData"
     )
 
+
+def test_setup_bat_does_not_autoclose_on_success():
+    """setup.bat tidak boleh menutup otomatis via timeout setelah instalasi berhasil, melainkan menunggu tombol."""
+    path = os.path.join(PROJECT_ROOT, "setup.bat")
+    content = open(path, encoding="utf-8").read()
+    # Bagian sukses di PROSES_INSTALL
+    assert "timeout /t" not in content[content.find(":PROSES_INSTALL"):content.find(":PROSES_UNINSTALL")], (
+        "setup.bat tidak boleh menggunakan timeout auto-close pada proses instalasi"
+    )
+
+
+def test_setup_bat_smart_differential_dependency_check():
+    """setup.bat harus memiliki pengecekan cerdas agar tidak mendownload ulang dependensi yang sudah ada."""
+    path = os.path.join(PROJECT_ROOT, "setup.bat")
+    content = open(path, encoding="utf-8").read()
+    assert "find_spec" in content or "missing" in content.lower(), (
+        "setup.bat harus mengecek paket yang sudah ada sebelum pip install untuk menghindari duplikasi"
+    )
+
+
