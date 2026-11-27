@@ -90,6 +90,7 @@ class CameraPipeline:
     latest_vehicle_detections = None
     latest_riders = []
     latest_vehicle_tracks = None
+    latest_track_scores = {}
 
     def __init__(
         self,
@@ -519,6 +520,9 @@ class CameraPipeline:
 
         # Collect bounding boxes for human-focused crop
         human_bboxes = []
+        active_tracks = {}
+        scale_x = 1.0
+        scale_y = 1.0
         if frame is not None and len(frame.shape) >= 2:
             orig_h, orig_w = frame.shape[:2]
             proc_w, proc_h = self.app_config.input_resolution if hasattr(self.app_config, "input_resolution") else (640, 360)
@@ -577,6 +581,23 @@ class CameraPipeline:
                         v_box[3] * scale_y,
                     ])
 
+        # --- Identify primary suspect for face crop ---
+        target_ids = list(event.track_ids) if getattr(event, "track_ids", None) else list(active_tracks.keys())
+        scores = getattr(self, "latest_track_scores", None) or {}
+        primary_track_id = (
+            max(target_ids, key=lambda tid: getattr(scores.get(tid), "total_score", 0.0))
+            if target_ids else None
+        )
+
+        primary_bbox = None
+        primary_kp = None
+        if primary_track_id is not None:
+            pth = active_tracks.get(primary_track_id)
+            if pth and getattr(pth, "latest_bbox", None):
+                bx1, by1, bx2, by2 = pth.latest_bbox
+                primary_bbox = [bx1 * scale_x, by1 * scale_y, bx2 * scale_x, by2 * scale_y]
+                primary_kp = getattr(pth, "latest_keypoints", None)
+
         # Capture cropped snapshot specifically for Telegram (must be before capture_snapshot clears buffer)
         crop_snapshot_path = None
         if is_vehicle_event and vehicle_bboxes and hasattr(self.snapshot_scheduler, "capture_vehicle_crop"):
@@ -596,6 +617,30 @@ class CameraPipeline:
                 padding=0.25,
             )
 
+        # --- Capture face crop of primary suspect ---
+        face_crop_path = None
+        should_capture_face = (
+            primary_bbox is not None
+            and not is_vehicle_event
+            and (
+                event.score >= 60
+                or any(r in getattr(event, "triggered_rules", []) for r in [
+                    "warehouse_taking_goods", "warehouse_rapid_departure",
+                    "gate_door_loitering", "line_crossing_gate",
+                    "suspicious_crouching", "fall_detected",
+                ])
+            )
+        )
+        if should_capture_face and hasattr(self.snapshot_scheduler, "capture_face_crop"):
+            face_crop_path = self.snapshot_scheduler.capture_face_crop(
+                camera_id=cam_id,
+                event_id=event.event_id,
+                bbox=primary_bbox,
+                keypoints=primary_kp,
+                frame_override=None,
+                padding=0.3,
+            )
+
         # Capture full snapshot (clears buffer)
         snapshot_path = self.snapshot_scheduler.capture_snapshot(
             camera_id=cam_id,
@@ -612,7 +657,7 @@ class CameraPipeline:
         elif veh_tracks and veh_tracks.any_moving:
             vehicle_info = "Moving Vehicle"
 
-        # Send Telegram alert (using cropped human image when available)
+        # Send Telegram alert (using cropped human image when available, with face crop album)
         await self.telegram.send_alert(
             camera_name=cam_name,
             score=event.score,
@@ -622,6 +667,7 @@ class CameraPipeline:
             event_id=event.event_id,
             alert_level="CRITICAL" if event.is_critical else "SUSPICIOUS",
             vehicle_info=vehicle_info,
+            face_snapshot_path=face_crop_path,
         )
 
         # Log to database
