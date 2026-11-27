@@ -59,6 +59,7 @@ class TrackFeatures:
     torso_angle: float = 0.0  # angle from vertical (0=standing upright, 90=lying flat)
     is_fall_detected: bool = False
     vertical_velocity_px_s: float = 0.0
+    time_since_crouch_sec: float = 999.0
 
     # Context features
     confidence: float = 0.0
@@ -250,6 +251,12 @@ class FeatureExtractor:
 
             if features.posture_state == "FALLEN_HORIZONTAL" or (vert_vel > 120.0 and features.torso_angle > 50.0):
                 features.is_fall_detected = True
+
+            # Track crouch timestamp for warehouse goods-taking / rapid departure
+            if features.posture_state == "CROUCHING_CRAWLING" or features.bbox_height_ratio_change <= 0.65:
+                history.recent_crouch_timestamp = now
+            crouch_ts = getattr(history, "recent_crouch_timestamp", 0.0)
+            features.time_since_crouch_sec = (now - crouch_ts) if crouch_ts > 0 else 999.0
 
             per_track[track_id] = features
 

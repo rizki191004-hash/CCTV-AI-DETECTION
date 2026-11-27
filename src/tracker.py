@@ -36,6 +36,7 @@ class TrackHistory:
     points: Deque[TrackPoint] = field(default_factory=lambda: deque(maxlen=300))
     is_active: bool = True
     class_type: str = "human"  # "human" or "animal"
+    recent_crouch_timestamp: float = 0.0
 
     @property
     def age_sec(self) -> float:

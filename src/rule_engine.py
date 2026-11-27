@@ -266,6 +266,25 @@ class RuleEngine:
                 # This rule makes the system alert on every person detection
                 triggered = True
 
+            elif cond.type == "warehouse_taking_goods":
+                # Person crouching in warehouse or storage zone
+                target_zone = params.get("zone", "warehouse_zone")
+                in_zone = target_zone in features.current_zones if target_zone else True
+                is_crouching = (
+                    features.posture_state == "CROUCHING_CRAWLING"
+                    or features.bbox_height_ratio_change <= 0.65
+                )
+                triggered = in_zone and is_crouching
+
+            elif cond.type == "warehouse_rapid_departure":
+                # Rapid departure after crouching in warehouse
+                min_speed = float(params.get("min_speed", 120.0))
+                max_sec = float(params.get("max_sec", 5.0))
+                triggered = (
+                    features.speed_px_per_sec >= min_speed
+                    and features.time_since_crouch_sec <= max_sec
+                )
+
             else:
                 logger.debug("Unknown rule condition type: %s", cond.type)
 

@@ -213,3 +213,38 @@ rules:
     cooldown_sec: 45
     critical: false
     reason: "Postur mencurigakan (merayap / jongkok)"
+
+  # --- Rule 17: Warehouse Goods-Taking ---
+  - id: warehouse_taking_goods
+    enabled: true
+    condition:
+      type: warehouse_taking_goods
+      zone: warehouse_zone
+    score_delta: 60
+    cooldown_sec: 30
+    critical: false
+    reason: "Terindikasi mengambil barang di gudang (merunduk)"
+
+  # --- Rule 18: Warehouse Rapid Departure ---
+  - id: warehouse_rapid_departure
+    enabled: true
+    condition:
+      type: warehouse_rapid_departure
+      min_speed: 120
+      max_sec: 5
+    score_delta: 30
+    cooldown_sec: 30
+    critical: false
+    reason: "Kabur cepat setelah merunduk di gudang"
+
+  # --- Rule 19: Gate / Door Loitering ---
+  - id: gate_door_loitering
+    enabled: true
+    condition:
+      type: dwell_time
+      zone: door_zone
+      min_sec: 15
+    score_delta: 35
+    cooldown_sec: 30
+    critical: false
+    reason: "Berdiam lama di area pintu/gerbang"
