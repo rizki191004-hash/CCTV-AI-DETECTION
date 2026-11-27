@@ -73,6 +73,98 @@ def crop_human_region(
     return frame[y1:y2, x1:x2].copy()
 
 
+def crop_face_region(
+    frame: np.ndarray,
+    bbox: Sequence[float],
+    keypoints: Optional[np.ndarray] = None,
+    padding: float = 0.3,
+) -> Optional[np.ndarray]:
+    """Crop the facial/head region of a person with visibility confirmation.
+
+    If keypoints are provided, validates that facial keypoints (nose, eyes)
+    have sufficient confidence (>= 0.25). If the person is facing away
+    (confidences < 0.25), returns None to prevent sending back-of-head crops.
+
+    Args:
+        frame: BGR frame (H, W, C).
+        bbox: Bounding box [x1, y1, x2, y2] of the target person.
+        keypoints: Optional 17-point pose keypoints array (N, 2) or (N, 3).
+        padding: Padding factor around face bounds (default 0.3 = 30%).
+
+    Returns:
+        Cropped BGR image slice containing face, or None if face not visible/invalid.
+    """
+    if frame is None or len(bbox) < 4:
+        return None
+
+    bx1, by1, bx2, by2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+    bw = bx2 - bx1
+    bh = by2 - by1
+
+    if bw <= 0 or bh <= 0:
+        return None
+
+    h, w = frame.shape[:2]
+
+    # Case 1: Pose keypoints provided
+    if keypoints is not None and len(keypoints) >= 3:
+        # Check facial points: 0 (nose), 1 (left eye), 2 (right eye)
+        facial_pts = [keypoints[0], keypoints[1], keypoints[2]]
+        confs = [pt[2] if len(pt) > 2 else 1.0 for pt in facial_pts]
+        max_conf = max(confs)
+
+        # If highest face confidence is below 0.25, person is facing away
+        if max_conf < 0.25:
+            return None
+
+        # Collect valid facial coordinates
+        valid_coords = [pt[:2] for pt, c in zip(facial_pts, confs) if c >= 0.25]
+        if not valid_coords:
+            return None
+
+        min_fx = min(pt[0] for pt in valid_coords)
+        max_fx = max(pt[0] for pt in valid_coords)
+        min_fy = min(pt[1] for pt in valid_coords)
+        max_fy = max(pt[1] for pt in valid_coords)
+
+        # Factor in ears if available and visible
+        if len(keypoints) >= 5:
+            for ear_idx in (3, 4):
+                ear_pt = keypoints[ear_idx]
+                ear_conf = ear_pt[2] if len(ear_pt) > 2 else 1.0
+                if ear_conf >= 0.3:
+                    min_fx = min(min_fx, ear_pt[0])
+                    max_fx = max(max_fx, ear_pt[0])
+                    min_fy = min(min_fy, ear_pt[1])
+                    max_fy = max(max_fy, ear_pt[1])
+
+        cx = (min_fx + max_fx) / 2.0
+        cy = (min_fy + max_fy) / 2.0
+
+        raw_fw = max(20.0, max_fx - min_fx)
+        raw_fh = max(20.0, max_fy - min_fy)
+        face_w = max(raw_fw * (1.0 + padding * 2.0), bw * 0.4)
+        face_h = max(raw_fh * (1.0 + padding * 2.0), bh * 0.25)
+
+    else:
+        # Case 2: Geometric upper-body estimate
+        cx = (bx1 + bx2) / 2.0
+        cy = by1 + bh * 0.15
+        face_w = max(20.0, bw * 0.5 * (1.0 + padding))
+        face_h = max(20.0, bh * 0.3 * (1.0 + padding))
+
+    # Clamp coordinates to frame boundaries
+    x1 = int(max(0, np.floor(cx - face_w / 2.0)))
+    y1 = int(max(0, np.floor(cy - face_h / 2.0)))
+    x2 = int(min(w, np.ceil(cx + face_w / 2.0)))
+    y2 = int(min(h, np.ceil(cy + face_h / 2.0)))
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    return frame[y1:y2, x1:x2].copy()
+
+
 def crop_vehicle_region(
     frame: np.ndarray,
     bboxes: Sequence[Sequence[float]],
@@ -361,6 +453,66 @@ class SnapshotScheduler:
             return str(filepath)
         except Exception as e:
             logger.error("[%s] Error saving vehicle cropped snapshot: %s", camera_id, e)
+            return None
+
+    def capture_face_crop(
+        self,
+        camera_id: str,
+        event_id: str,
+        bbox: Sequence[float],
+        keypoints: Optional[np.ndarray] = None,
+        frame_override: Optional[np.ndarray] = None,
+        padding: float = 0.3,
+    ) -> Optional[str]:
+        """Capture and save a cropped snapshot focusing specifically on the primary suspect's face.
+
+        Args:
+            camera_id: Camera identifier.
+            event_id: Event identifier.
+            bbox: Bounding box [x1, y1, x2, y2] of the primary suspect.
+            keypoints: Optional 17-point pose keypoints array.
+            frame_override: Optional frame to use instead of buffered best frame.
+            padding: Padding ratio around facial area (default 30%).
+
+        Returns:
+            File path of saved face crop, or None if face not visible/available.
+        """
+        key = f"{camera_id}:{event_id}"
+        if frame_override is not None:
+            source_frame = frame_override
+        elif key in self._best_frames:
+            source_frame = self._best_frames[key][0]
+        else:
+            logger.warning("[%s] No frame available for face crop snapshot", camera_id)
+            return None
+
+        cropped = crop_face_region(source_frame, bbox, keypoints=keypoints, padding=padding)
+        if cropped is None:
+            logger.debug("[%s] Face crop returned None (face not confirmed visible)", camera_id)
+            return None
+
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        short_event = event_id[:8]
+        filename = f"{camera_id}_{short_event}_{timestamp_str}_face.jpg"
+        filepath = self.snapshot_dir / filename
+
+        try:
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
+            success = cv2.imwrite(str(filepath), cropped, encode_params)
+            if not success:
+                logger.error("[%s] Failed to write face crop snapshot: %s", camera_id, filepath)
+                return None
+
+            file_size_kb = filepath.stat().st_size / 1024
+            logger.info(
+                "[%s] Face crop snapshot saved: %s (%.1f KB)",
+                camera_id,
+                filename,
+                file_size_kb,
+            )
+            return str(filepath)
+        except Exception as e:
+            logger.error("[%s] Error saving face crop snapshot: %s", camera_id, e)
             return None
 
     def get_snapshot_as_bytes(self, filepath: str) -> Optional[bytes]:
