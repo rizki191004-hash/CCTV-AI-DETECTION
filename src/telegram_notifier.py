@@ -269,12 +269,13 @@ class TelegramNotifier:
         triggered_rules: List[str],
         track_ids: List[int],
         snapshot_path: Optional[str] = None,
+        face_snapshot_path: Optional[str] = None,
         event_id: str = "",
         alert_level: str = "SUSPICIOUS",
         posture: Optional[str] = None,
         vehicle_info: Optional[str] = None,
     ) -> bool:
-        """Send a suspicious activity alert with optional snapshot photo."""
+        """Send a suspicious activity alert with optional snapshot photo or photo album."""
         if not self._enabled or self._bot is None:
             logger.debug("Telegram disabled — alert not sent")
             return False
@@ -290,7 +291,10 @@ class TelegramNotifier:
             vehicle_info=vehicle_info,
         )
 
-        return await self._send_message_with_photo(caption, snapshot_path)
+        if snapshot_path and face_snapshot_path and Path(snapshot_path).exists() and Path(face_snapshot_path).exists():
+            return await self._send_media_group_photos([snapshot_path, face_snapshot_path], caption)
+        else:
+            return await self._send_message_with_photo(caption, snapshot_path)
 
     async def send_periodic_snapshot(
         self,
@@ -471,6 +475,58 @@ class TelegramNotifier:
             return await self._send_photo(photo_path, caption)
         else:
             return await self._send_text(caption)
+
+    async def _send_media_group_photos(self, photo_paths: List[str], caption: str) -> bool:
+        """Send multiple photos as an album (Media Group) with retry and rate limiting."""
+        async with self._send_lock:
+            await self._wait_rate_limit()
+
+            for attempt in range(1, self.retry_count + 1):
+                try:
+                    from telegram import InputMediaPhoto
+                    media = []
+                    for i, p in enumerate(photo_paths):
+                        with open(p, "rb") as f:
+                            p_bytes = f.read()
+                        if i == 0:
+                            media.append(InputMediaPhoto(media=p_bytes, caption=caption, parse_mode="MarkdownV2"))
+                        else:
+                            media.append(InputMediaPhoto(media=p_bytes))
+
+                    await self._bot.send_media_group(
+                        chat_id=self.chat_id,
+                        media=media,
+                        read_timeout=self.send_timeout,
+                        write_timeout=self.send_timeout,
+                    )
+
+                    self._last_send_time = time.time()
+                    self._sent_count += 1
+                    logger.info("Telegram media group album sent (attempt %d, %d photos)", attempt, len(media))
+                    return True
+
+                except Exception as e:
+                    error_name = type(e).__name__
+                    if "RetryAfter" in error_name or "Flood" in str(e):
+                        retry_after = getattr(e, 'retry_after', 10)
+                        logger.warning("Telegram rate limited, waiting %ds...", retry_after)
+                        await asyncio.sleep(retry_after)
+                        continue
+
+                    if attempt < self.retry_count:
+                        delay = self.retry_backoff_base * (2 ** (attempt - 1))
+                        logger.warning(
+                            "Telegram media group failed (attempt %d/%d): %s. Retrying in %.1fs...",
+                            attempt, self.retry_count, e, delay
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error("Failed to send Telegram media group, will fallback to single photo: %s", e)
+                        break
+
+        # Outside lock: fallback to sending single primary photo
+        logger.info("Falling back to sending single primary photo")
+        return await self._send_photo(photo_paths[0], caption)
 
     async def _send_photo(self, photo_path: str, caption: str) -> bool:
         """Send a photo via Telegram with retry and rate limiting."""
